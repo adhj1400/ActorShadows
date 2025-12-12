@@ -1,0 +1,694 @@
+#include "SKSE/SKSE.h"
+#include "src/Globals.h"
+#include "src/EventListeners.h"
+#include "src/UpdateLogic.h"
+
+using namespace SKSE;
+using namespace TorchShadowLimiter;
+
+SKSEPluginLoad(const SKSE::LoadInterface* skse) {
+    SKSE::Init(skse);
+
+    SKSE::GetMessagingInterface()->RegisterListener([](SKSE::MessagingInterface::Message* message) {
+        if (message->type == SKSE::MessagingInterface::kDataLoaded) {
+            if (auto* console = RE::ConsoleLog::GetSingleton()) {
+                console->Print("Torch Shadow Limiter loaded");
+            }
+
+            // Optional: keep cell-based updates
+            CellListener::Install();
+
+            // New: equip-based polling & 5s timer
+            EquipListener::Install();
+
+            // Spell cast detection for Candlelight
+            SpellCastListener::Install();
+
+            StartTorchPollThread();
+        }
+    });
+
+    return true;
+}
+
+        if (!player) {
+            return nullptr;
+        }
+
+        TESForm* right = player->GetEquippedObject(false);
+        TESForm* left = player->GetEquippedObject(true);
+
+        auto asLight = [](TESForm* form) -> TESObjectLIGH* { return form ? form->As<TESObjectLIGH>() : nullptr; };
+
+        if (auto* l = asLight(right)) {
+            return l;
+        }
+        if (auto* l = asLight(left)) {
+            return l;
+        }
+
+        return nullptr;
+    }
+
+    bool g_isReequippingTorch = false;
+
+    void ForceReequipTorch(RE::PlayerCharacter* player) {
+        if (g_isReequippingTorch) {
+            return;
+        }
+        if (!player || g_isReequippingTorch) {
+            return;
+        }
+
+        auto* torchBase = GetPlayerTorchBase(player);
+        if (!torchBase) {
+            return;
+        }
+
+        auto* equipManager = RE::ActorEquipManager::GetSingleton();
+        if (!equipManager) {
+            return;
+        }
+
+        // Which hand is it in?
+        bool inLeft = (player->GetEquippedObject(true) == torchBase);
+        bool inRight = (player->GetEquippedObject(false) == torchBase);
+
+        if (!inLeft && !inRight) {
+            return;
+        }
+
+        // Pick the slot based on hand
+        RE::BGSEquipSlot* slot = nullptr;
+        if (auto* dom = RE::BGSDefaultObjectManager::GetSingleton()) {
+            if (inLeft) {
+                slot = dom->GetObject<RE::BGSEquipSlot>(RE::DEFAULT_OBJECT::kLeftHandEquip);
+            } else {
+                slot = dom->GetObject<RE::BGSEquipSlot>(RE::DEFAULT_OBJECT::kRightHandEquip);
+            }
+        }
+
+        g_isReequippingTorch = true;
+
+        // Base form already modified by caller, just re-equip
+        equipManager->UnequipObject(player, torchBase,
+                                    nullptr,  // extraData
+                                    1,        // count
+                                    slot,     // equip slot
+                                    true,     // queueEquip
+                                    false,    // forceEquip
+                                    false,    // playSound
+                                    false,    // applyNow / locked
+                                    nullptr   // unknown / disarm? (depends on version)
+        );
+
+        equipManager->EquipObject(player, torchBase,
+                                  nullptr,  // extraData
+                                  1, slot,
+                                  true,    // queueEquip
+                                  false,   // forceEquip
+                                  false,   // playSound
+                                  false);  // applyNow / locked
+
+        // Restore base form after a delay so the reference keeps shadows but base form doesn't
+        std::thread([torchBase]() {
+            using namespace std::chrono_literals;
+            std::this_thread::sleep_for(200ms);  // Short delay for torch to spawn
+
+            if (auto* tasks = SKSE::GetTaskInterface()) {
+                tasks->AddTask([torchBase]() {
+                    SetLightTypeNative(torchBase, g_originalTorchLightType);
+                    g_isReequippingTorch = false;
+
+                    if (auto* console = ConsoleLog::GetSingleton()) {
+                        console->Print("Restored base form to original type: %u", g_originalTorchLightType);
+                    }
+                });
+            } else {
+                g_isReequippingTorch = false;
+            }
+        }).detach();
+    }
+
+    // -------------------------------
+    // Adjust Torch Light Position
+    // -------------------------------
+
+    void AdjustTorchLightPosition(PlayerCharacter* player) {
+        if (!player) return;
+
+        auto* root3D = player->Get3D(false);
+        if (!root3D) return;
+
+        RE::NiAVObject* lightNode = root3D->GetObjectByName("AttachLight");
+        if (lightNode) {
+            // Move the light upward (Y axis because node rotation is flipped)
+            lightNode->local.translate.y += 20.0f;
+
+            // Update the node
+            RE::NiUpdateData updateData;
+            lightNode->Update(updateData);
+        }
+    }
+
+    // -------------------------------
+    // Count Nearby Shadow Lights
+    // -------------------------------
+
+    std::uint32_t CountNearbyShadowLights(Actor* center, float radius) {
+        auto* console = RE::ConsoleLog::GetSingleton();
+
+        if (!center) {
+            if (console) {
+                console->Print("[TSL] CountNearbyShadowLights: center actor is null");
+            }
+            return 0;
+        }
+
+        auto* cell = center->GetParentCell();
+        if (!cell) {
+            if (console) {
+                console->Print("[TSL] CountNearbyShadowLights: parent cell is null");
+            }
+            return 0;
+        }
+
+        const auto origin = center->GetPosition();
+
+        std::uint32_t totalLights = 0;
+        std::uint32_t shadowLights = 0;
+
+        cell->ForEachReferenceInRange(origin, radius, [&](RE::TESObjectREFR& ref) -> RE::BSContainer::ForEachResult {
+            if (ref.IsDeleted() || ref.IsDisabled()) {
+                return RE::BSContainer::ForEachResult::kContinue;
+            }
+
+            auto* base = ref.GetBaseObject();
+            if (!base) {
+                return RE::BSContainer::ForEachResult::kContinue;
+            }
+
+            if (auto* light = base->As<RE::TESObjectLIGH>()) {
+                ++totalLights;
+
+                auto type = GetLightType(light);
+
+                if (type == 1 || type == 3 || type == 5) {
+                    ++shadowLights;
+                }
+            }
+
+            return RE::BSContainer::ForEachResult::kContinue;
+        });
+
+        if (console) {
+            // console->Print("[TSL] Scan radius %.0f: total LIGH=%u, shadow=%u", radius, totalLights, shadowLights);
+        }
+
+        return shadowLights;
+    }
+
+    // -------------------------------
+    // Main Update Logic
+    // -------------------------------
+
+    void UpdateTorchShadowState_Native() {
+        if (auto* console = ConsoleLog::GetSingleton()) {
+            // console->Print("Updating torch shadow state...");
+        }
+
+        auto* player = PlayerCharacter::GetSingleton();
+        if (!player) {
+            return;
+        }
+
+        // Use a larger radius now
+        constexpr float kScanRadius = 6000.0f;
+
+        std::uint32_t shadowCount = CountNearbyShadowLights(player, kScanRadius);
+        bool wantShadow = shadowCount < 4;
+
+        if (auto* console = ConsoleLog::GetSingleton()) {
+            // console->Print("Found %u nearby shadow-casting lights.", shadowCount);
+        }
+
+        // Handle torch shadow changes (only if torch is equipped)
+        auto* torchLight = GetPlayerTorchBase(player);
+        if (torchLight && wantShadow != g_lastShadowEnabled) {
+            if (auto* console = ConsoleLog::GetSingleton()) {
+                console->Print("Shadow state change: %s -> %s (original type: %u)",
+                               g_lastShadowEnabled ? "shadows" : "no shadows", wantShadow ? "shadows" : "no shadows",
+                               g_originalTorchLightType);
+            }
+            g_lastShadowEnabled = wantShadow;
+
+            if (auto* console = ConsoleLog::GetSingleton()) {
+                console->Print(wantShadow ? "Torch shadows ENABLED" : "Torch shadows DISABLED");
+            }
+
+            // Modify base form before re-equipping
+            if (wantShadow) {
+                SetLightTypeNative(torchLight, 3u);  // OmniShadow
+            } else {
+                SetLightTypeNative(torchLight, g_originalTorchLightType);
+            }
+
+            // Re-equip to apply shadow state (base form modified above)
+            ForceReequipTorch(player);
+
+            // Move light node after re-equip completes
+            std::thread([player]() {
+                using namespace std::chrono_literals;
+                std::this_thread::sleep_for(200ms);
+
+                if (auto* tasks = SKSE::GetTaskInterface()) {
+                    tasks->AddTask([player]() { AdjustTorchLightPosition(player); });
+                }
+            }).detach();
+        }
+
+        // Handle Candlelight spell effect (only if polling is enabled)
+        // This runs independently of torch shadow changes
+        if (g_pollCandlelight.load(std::memory_order_relaxed)) {
+            if (auto* console = ConsoleLog::GetSingleton()) {
+                console->Print("[DEBUG] Candlelight polling active, wantShadow=%d, lastCandlelight=%d, shadowCount=%u",
+                               wantShadow, g_lastCandlelightShadowEnabled, shadowCount);
+            }
+
+            auto* candlelightMGEF = TESForm::LookupByID<EffectSetting>(kCandlelightEffect);
+            auto* candlelightLight = TESForm::LookupByID<TESObjectLIGH>(kCandlelightLight);
+
+            if (candlelightMGEF && candlelightLight) {
+                // Check if effect is still active
+                auto* magicTarget = player->GetMagicTarget();
+                bool hasActiveCandlelight = magicTarget && magicTarget->HasMagicEffect(candlelightMGEF);
+
+                if (auto* console = ConsoleLog::GetSingleton()) {
+                    console->Print("[DEBUG] hasActiveCandlelight=%d", hasActiveCandlelight);
+                }
+
+                if (!hasActiveCandlelight) {
+                    // Effect ended, restore base form and stop polling
+                    SetLightTypeNative(candlelightLight, g_originalCandlelightLightType);
+                    g_pollCandlelight.store(false, std::memory_order_relaxed);
+                    g_originalCandlelightLightType = 0;      // Reset for next cast
+                    g_lastCandlelightShadowEnabled = false;  // Reset tracking
+                    if (auto* console = ConsoleLog::GetSingleton()) {
+                        console->Print("Candlelight effect ended, restored base form");
+                    }
+                } else if (g_lastCandlelightShadowEnabled != wantShadow) {
+                    // Effect still active and shadow state changed, reapply
+                    g_lastCandlelightShadowEnabled = wantShadow;  // Update tracking
+
+                    if (auto* console = ConsoleLog::GetSingleton()) {
+                        console->Print("=== CANDLELIGHT REAPPLY START ===");
+                        console->Print("Shadow state changed to %s", wantShadow ? "shadows" : "no shadows");
+                    }
+
+                    // Temporarily modify light base form
+                    if (wantShadow) {
+                        SetLightTypeNative(candlelightLight, 3u);  // OmniShadow
+                        if (auto* console = ConsoleLog::GetSingleton()) {
+                            console->Print("Set base form to OmniShadow (type 3)");
+                        }
+                    } else {
+                        SetLightTypeNative(candlelightLight, g_originalCandlelightLightType);
+                        if (auto* console = ConsoleLog::GetSingleton()) {
+                            console->Print("Set base form to original type %u", g_originalCandlelightLightType);
+                        }
+                    }
+
+                    // Cast the spell again (don't remove - Candlelight is an ability that stays)
+                    // Just cast the effect again with the modified base form
+                    auto* magicCaster = player->GetMagicCaster(MagicSystem::CastingSource::kInstant);
+                    if (magicCaster) {
+                        auto* candlelightSpell = TESForm::LookupByID<SpellItem>(kCandlelightSpell);
+                        if (candlelightSpell) {
+                            magicCaster->CastSpellImmediate(candlelightSpell, false, nullptr, 1.0f, false, 0.0f,
+                                                            nullptr);
+                            if (auto* console = ConsoleLog::GetSingleton()) {
+                                console->Print("Cast Candlelight spell again");
+                            }
+                        }
+                    }
+
+                    // Restore base form after a delay
+                    std::thread([candlelightLight]() {
+                        using namespace std::chrono_literals;
+                        std::this_thread::sleep_for(1s);
+
+                        if (auto* tasks = SKSE::GetTaskInterface()) {
+                            tasks->AddTask([candlelightLight]() {
+                                SetLightTypeNative(candlelightLight, g_originalCandlelightLightType);
+                                if (auto* console = ConsoleLog::GetSingleton()) {
+                                    console->Print("Restored candlelight base form (type %u)",
+                                                   g_originalCandlelightLightType);
+                                    console->Print("=== CANDLELIGHT REAPPLY COMPLETE ===");
+                                }
+                            });
+                        }
+                    }).detach();
+                }
+            }
+        }
+    }
+
+    void StartTorchPollThread() {
+        static std::once_flag s_started;
+
+        std::call_once(s_started, [] {
+            std::thread([] {
+                using namespace std::chrono_literals;
+
+                while (true) {
+                    std::this_thread::sleep_for(5s);
+
+                    // Only do work if torch or candlelight polling is enabled
+                    if (!g_pollTorch.load(std::memory_order_relaxed) &&
+                        !g_pollCandlelight.load(std::memory_order_relaxed)) {
+                        continue;
+                    }
+
+                    auto* taskInterface = SKSE::GetTaskInterface();
+                    if (!taskInterface) {
+                        continue;
+                    }
+
+                    // All game calls must run on the game thread
+                    taskInterface->AddTask([]() { UpdateTorchShadowState_Native(); });
+                }
+            }).detach();
+        });
+    }
+
+    // Helper: queue onto main thread instead of running in event thread
+    void QueueTorchUpdate() {
+        if (auto* tasks = SKSE::GetTaskInterface()) {
+            tasks->AddTask([]() {
+                // This lambda runs on the main thread
+                UpdateTorchShadowState_Native();
+            });
+        }
+    }
+
+    class EquipListener : public BSTEventSink<TESEquipEvent> {
+    public:
+        static EquipListener* Get() {
+            static EquipListener inst;
+            return std::addressof(inst);
+        }
+
+        static void Install() {
+            if (auto* holder = ScriptEventSourceHolder::GetSingleton()) {
+                holder->AddEventSink<TESEquipEvent>(Get());
+            }
+        }
+
+        BSEventNotifyControl ProcessEvent(const TESEquipEvent* a_event, BSTEventSource<TESEquipEvent>*) override {
+            if (g_isReequippingTorch) {
+                return BSEventNotifyControl::kContinue;
+            }
+
+            if (!a_event) {
+                return BSEventNotifyControl::kContinue;
+            }
+
+            auto* player = PlayerCharacter::GetSingleton();
+            if (!player) {
+                return BSEventNotifyControl::kContinue;
+            }
+
+            // Only care about the player
+            if (a_event->actor.get() != player) {
+                return BSEventNotifyControl::kContinue;
+            }
+
+            // Resolve base form
+            auto* form = TESForm::LookupByID(a_event->baseObject);
+            if (!form) {
+                return BSEventNotifyControl::kContinue;
+            }
+
+            auto* asLight = form->As<TESObjectLIGH>();
+            if (!asLight) {
+                // Not a light/torch, ignore
+                return BSEventNotifyControl::kContinue;
+            }
+
+            // If equipped: check if we need to enable shadows
+            if (a_event->equipped) {
+                // Store original light type before any modifications
+                if (g_originalTorchLightType == 0) {
+                    g_originalTorchLightType = GetLightType(asLight);
+                    if (auto* console = ConsoleLog::GetSingleton()) {
+                        console->Print("Stored original torch light type: %u", g_originalTorchLightType);
+                    }
+                }
+
+                g_pollTorch.store(true, std::memory_order_relaxed);
+
+                // Determine if shadows should be enabled
+                constexpr float kScanRadius = 6000.0f;
+                std::uint32_t shadowCount = CountNearbyShadowLights(player, kScanRadius);
+                bool wantShadow = shadowCount < 4;
+                g_lastShadowEnabled = wantShadow;
+
+                if (auto* console = ConsoleLog::GetSingleton()) {
+                    console->Print("Equip: Found %u shadow lights, shadows %s", shadowCount,
+                                   wantShadow ? "ENABLED" : "DISABLED");
+                }
+
+                // Only intervene if we need shadows enabled
+                if (wantShadow) {
+                    std::uint32_t currentType = GetLightType(asLight);
+                    // Only re-equip if the torch doesn't already have shadows
+                    if (currentType != 3) {               // Not OmniShadow
+                        SetLightTypeNative(asLight, 3u);  // Set to OmniShadow
+
+                        if (auto* console = ConsoleLog::GetSingleton()) {
+                            console->Print("Enabling shadows on torch (re-equipping)");
+                        }
+
+                        // Re-equip to apply the shadow change
+                        ForceReequipTorch(player);
+
+                        // Move light AFTER re-equip completes
+                        std::thread([player]() {
+                            using namespace std::chrono_literals;
+                            std::this_thread::sleep_for(200ms);
+
+                            if (auto* tasks = SKSE::GetTaskInterface()) {
+                                tasks->AddTask([player]() { AdjustTorchLightPosition(player); });
+                            }
+                        }).detach();
+                    }
+                }
+                // If shadows NOT wanted, do nothing - let torch equip normally
+            } else {
+                // Unequipped that light: stop polling
+                g_pollTorch.store(false, std::memory_order_relaxed);
+                g_originalTorchLightType = 0;  // Reset for next torch
+            }
+
+            return BSEventNotifyControl::kContinue;
+        }
+    };
+
+    // -------------------------------
+    // Spell Cast Event Listener
+    // -------------------------------
+
+    class SpellCastListener : public BSTEventSink<TESSpellCastEvent> {
+    public:
+        static SpellCastListener* Get() {
+            static SpellCastListener inst;
+            return std::addressof(inst);
+        }
+
+        static void Install() {
+            if (auto* holder = ScriptEventSourceHolder::GetSingleton()) {
+                holder->AddEventSink<TESSpellCastEvent>(Get());
+            }
+        }
+
+        BSEventNotifyControl ProcessEvent(const TESSpellCastEvent* a_event,
+                                          BSTEventSource<TESSpellCastEvent>*) override {
+            if (!a_event) {
+                return BSEventNotifyControl::kContinue;
+            }
+
+            auto* player = PlayerCharacter::GetSingleton();
+            if (!player || a_event->object.get() != player) {
+                return BSEventNotifyControl::kContinue;
+            }
+
+            // Check if it's the Candlelight spell
+            auto* spell = TESForm::LookupByID<SpellItem>(a_event->spell);
+            if (!spell) {
+                return BSEventNotifyControl::kContinue;
+            }
+
+            // Check if spell contains Candlelight effect
+            auto* candlelightMGEF = TESForm::LookupByID<EffectSetting>(kCandlelightEffect);
+            if (!candlelightMGEF) {
+                return BSEventNotifyControl::kContinue;
+            }
+
+            bool hasCandlelightEffect = false;
+            for (auto* effect : spell->effects) {
+                if (effect && effect->baseEffect == candlelightMGEF) {
+                    hasCandlelightEffect = true;
+                    break;
+                }
+            }
+
+            if (hasCandlelightEffect) {
+                if (auto* console = ConsoleLog::GetSingleton()) {
+                    console->Print("Candlelight spell cast detected");
+                }
+
+                // Enable polling
+                g_pollCandlelight.store(true, std::memory_order_relaxed);
+                if (auto* console = ConsoleLog::GetSingleton()) {
+                    console->Print("[DEBUG] Set g_pollCandlelight = true");
+                }
+
+                // Determine shadow state
+                constexpr float kScanRadius = 6000.0f;
+                std::uint32_t shadowCount = CountNearbyShadowLights(player, kScanRadius);
+                bool wantShadow = shadowCount < 4;
+                // Don't set g_lastShadowEnabled here - that's for torch only
+                g_lastCandlelightShadowEnabled = wantShadow;  // Initialize Candlelight tracking
+
+                if (auto* console = ConsoleLog::GetSingleton()) {
+                    console->Print("[DEBUG] Initial Candlelight shadow state: %d (shadowCount=%u)", wantShadow,
+                                   shadowCount);
+                }
+
+                auto* candlelightLight = TESForm::LookupByID<TESObjectLIGH>(kCandlelightLight);
+                if (candlelightLight) {
+                    if (g_originalCandlelightLightType == 0) {
+                        g_originalCandlelightLightType = GetLightType(candlelightLight);
+                    }
+
+                    if (auto* console = ConsoleLog::GetSingleton()) {
+                        console->Print("Setting candlelight base form to %s (type %u -> %u)",
+                                       wantShadow ? "shadows" : "no shadows", g_originalCandlelightLightType,
+                                       wantShadow ? 3 : g_originalCandlelightLightType);
+                    }
+
+                    // Modify light base form before effect applies
+                    if (wantShadow) {
+                        SetLightTypeNative(candlelightLight, 3u);  // OmniShadow
+                    } else {
+                        SetLightTypeNative(candlelightLight, g_originalCandlelightLightType);
+                    }
+
+                    // Spawn a timer thread to restore base form after 1 second
+                    std::thread([candlelightLight, player, candlelightMGEF]() {
+                        using namespace std::chrono_literals;
+                        std::this_thread::sleep_for(1s);
+
+                        // Queue restoration on main thread
+                        if (auto* tasks = SKSE::GetTaskInterface()) {
+                            tasks->AddTask([candlelightLight, player, candlelightMGEF]() {
+                                // Verify effect is still active before restoring
+                                auto* magicTarget = player->GetMagicTarget();
+                                if (magicTarget && magicTarget->HasMagicEffect(candlelightMGEF)) {
+                                    SetLightTypeNative(candlelightLight, g_originalCandlelightLightType);
+                                    if (auto* console = ConsoleLog::GetSingleton()) {
+                                        console->Print("Restored candlelight base form after 1 second");
+                                    }
+                                }
+                            });
+                        }
+                    }).detach();
+                }
+            }
+
+            // Ensure polling thread is running for Candlelight shadow state changes
+            if (auto* console = ConsoleLog::GetSingleton()) {
+                console->Print("[DEBUG] Starting polling thread");
+            }
+            StartTorchPollThread();
+
+            return BSEventNotifyControl::kContinue;
+        }
+    };
+
+    // -------------------------------
+    // Cell Event Listener (native)
+    // -------------------------------
+
+    class CellListener : public BSTEventSink<BGSActorCellEvent>, public BSTEventSink<TESCellFullyLoadedEvent> {
+    public:
+        static CellListener* Get() {
+            static CellListener inst;
+            return std::addressof(inst);
+        }
+
+        static void Install() {
+            auto* player = PlayerCharacter::GetSingleton();
+            if (player) {
+                if (auto* src = player->AsBGSActorCellEventSource()) {
+                    src->AddEventSink<BGSActorCellEvent>(Get());
+                }
+            }
+
+            if (auto* scriptSrc = ScriptEventSourceHolder::GetSingleton()) {
+                scriptSrc->AddEventSink<TESCellFullyLoadedEvent>(Get());
+            }
+        }
+
+        BSEventNotifyControl ProcessEvent(const BGSActorCellEvent* e, BSTEventSource<BGSActorCellEvent>*) override {
+            if (e && e->flags == BGSActorCellEvent::CellFlag::kEnter) {
+                if (auto* tasks = SKSE::GetTaskInterface()) {
+                    // 🚨 IMPORTANT: use AddUITask, NOT AddTask
+                    tasks->AddUITask([]() { UpdateTorchShadowState_Native(); });
+                }
+            }
+            return BSEventNotifyControl::kContinue;
+        }
+
+        BSEventNotifyControl ProcessEvent(const TESCellFullyLoadedEvent* e,
+                                          BSTEventSource<TESCellFullyLoadedEvent>*) override {
+            auto* player = PlayerCharacter::GetSingleton();
+            if (player && e && e->cell == player->GetParentCell()) {
+                if (auto* tasks = SKSE::GetTaskInterface()) {
+                    tasks->AddUITask([]() { UpdateTorchShadowState_Native(); });
+                }
+            }
+            return BSEventNotifyControl::kContinue;
+        }
+    };
+
+}
+
+// -------------------------------------
+// SKSE entry point
+// -------------------------------------
+
+SKSEPluginLoad(const SKSE::LoadInterface* skse) {
+    SKSE::Init(skse);
+
+    SKSE::GetMessagingInterface()->RegisterListener([](SKSE::MessagingInterface::Message* message) {
+        if (message->type == SKSE::MessagingInterface::kDataLoaded) {
+            if (auto* console = RE::ConsoleLog::GetSingleton()) {
+                console->Print("Torch Shadow Limiter loaded");
+            }
+
+            // Optional: keep cell-based updates
+            CellListener::Install();
+
+            // New: equip-based polling & 5s timer
+            EquipListener::Install();
+
+            // Spell cast detection for Candlelight
+            SpellCastListener::Install();
+
+            StartTorchPollThread();
+        }
+    });
+
+    return true;
+}
