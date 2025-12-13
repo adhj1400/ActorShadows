@@ -86,27 +86,14 @@ namespace TorchShadowLimiter {
 
         // ============ Candlelight Logic ============
         if (g_pollCandlelight) {
-            // Check if Candlelight is active
-            bool candlelightActive = false;
-
-            auto* magicTarget = player->GetMagicTarget();
-            if (magicTarget) {
-                auto* activeEffects = magicTarget->GetActiveEffectList();
-                if (activeEffects) {
-                    for (auto& effect : *activeEffects) {
-                        if (effect && effect->effect && effect->effect->baseEffect) {
-                            if (effect->effect->baseEffect->GetFormID() == kCandlelightEffect) {
-                                candlelightActive = true;
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
+            bool candlelightActive = HasMagicEffect(player, kCandlelightEffect);
 
             if (candlelightActive) {
-                // Get Candlelight light base form
-                auto* candlelightLight = RE::TESForm::LookupByID<RE::TESObjectLIGH>(kCandlelightLight);
+                // Get the light from the magic effect's associated data
+                auto* candlelightEffect = RE::TESForm::LookupByID<RE::EffectSetting>(kCandlelightEffect);
+                auto* candlelightLight =
+                    candlelightEffect ? candlelightEffect->data.associatedForm->As<RE::TESObjectLIGH>() : nullptr;
+
                 if (candlelightLight) {
                     // Only update if state changed from last known state
                     if (wantShadows != g_lastCandlelightShadowEnabled) {

@@ -20,7 +20,6 @@ namespace TorchShadowLimiter {
 
     // FormIDs
     constexpr RE::FormID kCandlelightEffect = 0x0001EA6C;
-    constexpr RE::FormID kCandlelightLight = 0x0003FA58;
     constexpr RE::FormID kCandlelightSpell = 0x00043324;
 
     // Global state
