@@ -2,11 +2,11 @@
 #include "src/Config.h"
 #include "src/EventListeners.h"
 #include "src/Globals.h"
-#include "src/Helper.h"
 #include "src/UpdateLogic.h"
+#include "src/utils/Console.h"
 
 using namespace SKSE;
-using namespace TorchShadowLimiter;
+using namespace ActorShadowLimiter;
 
 SKSEPluginLoad(const SKSE::LoadInterface* skse) {
     SKSE::Init(skse);

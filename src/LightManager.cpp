@@ -1,17 +1,17 @@
-#include "TorchManager.h"
+#include "LightManager.h"
 
 #include <chrono>
 #include <thread>
 
 #include "Config.h"
 #include "Globals.h"
-#include "Helper.h"
-#include "LightHelpers.h"
 #include "SKSE/SKSE.h"
+#include "utils/Console.h"
+#include "utils/Light.h"
 
-namespace TorchShadowLimiter {
+namespace ActorShadowLimiter {
 
-    RE::TESObjectLIGH* GetPlayerTorchBase(RE::PlayerCharacter* player) {
+    RE::TESObjectLIGH* GetEquippedLight(RE::PlayerCharacter* player) {
         if (!player) {
             return nullptr;
         }
@@ -33,7 +33,7 @@ namespace TorchShadowLimiter {
         return nullptr;
     }
 
-    void ForceReequipTorch(RE::PlayerCharacter* player) {
+    void ForceReequipLight(RE::PlayerCharacter* player) {
         if (g_isReequipping) {
             return;
         }
@@ -41,7 +41,7 @@ namespace TorchShadowLimiter {
             return;
         }
 
-        auto* torchBase = GetPlayerTorchBase(player);
+        auto* torchBase = GetEquippedLight(player);
         if (!torchBase) {
             return;
         }
@@ -51,7 +51,7 @@ namespace TorchShadowLimiter {
             return;
         }
 
-        // Torch is always in left hand
+        // Light is always in left hand
         RE::BGSEquipSlot* slot = nullptr;
         if (auto* dom = RE::BGSDefaultObjectManager::GetSingleton()) {
             slot = dom->GetObject<RE::BGSEquipSlot>(RE::DEFAULT_OBJECT::kLeftHandEquip);
@@ -83,18 +83,34 @@ namespace TorchShadowLimiter {
         }).detach();
     }
 
-    void AdjustTorchLightPosition(RE::PlayerCharacter* player) {
+    void AdjustLightPosition(RE::PlayerCharacter* player) {
         if (!player) return;
 
         auto* root3D = player->Get3D(false);
         if (!root3D) return;
 
-        RE::NiAVObject* lightNode = root3D->GetObjectByName(g_config.torchLightNodeName.c_str());
+        // Find the equipped light's config
+        auto* lightBase = GetEquippedLight(player);
+        if (!lightBase) return;
+
+        uint32_t lightFormId = lightBase->GetFormID();
+        const HandHeldLightConfig* lightConfig = nullptr;
+
+        for (const auto& config : g_config.handHeldLights) {
+            if (config.formId == lightFormId) {
+                lightConfig = &config;
+                break;
+            }
+        }
+
+        if (!lightConfig) return;
+
+        RE::NiAVObject* lightNode = root3D->GetObjectByName(lightConfig->nodeName.c_str());
         if (lightNode) {
             // Move the light (Y axis because node rotation is flipped)
-            lightNode->local.translate.x += g_config.torchLightOffsetX;
-            lightNode->local.translate.y += g_config.torchLightOffsetY;
-            lightNode->local.translate.z += g_config.torchLightOffsetZ;
+            lightNode->local.translate.x += lightConfig->offsetX;
+            lightNode->local.translate.y += lightConfig->offsetY;
+            lightNode->local.translate.z += lightConfig->offsetZ;
 
             // Update the node
             RE::NiUpdateData updateData;

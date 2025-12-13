@@ -15,10 +15,11 @@ add_commonlibsse_plugin(${PROJECT_NAME} SOURCES
     main.cpp
     src/Config.cpp
     src/Globals.cpp
-    src/Helper.cpp
-    src/LightHelpers.cpp
-    src/TorchManager.cpp
-    src/ShadowCounter.cpp
+    src/utils/MagicEffect.cpp
+    src/utils/Console.cpp
+    src/utils/Light.cpp
+    src/LightManager.cpp
+    src/utils/ShadowCounter.cpp
     src/UpdateLogic.cpp
     src/EventListeners.cpp
 ) # <--- specifies all source files

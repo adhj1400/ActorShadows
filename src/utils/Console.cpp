@@ -1,10 +1,10 @@
-#include "Helper.h"
+#include "Console.h"
 
 #include <cstdarg>
 
-#include "Config.h"
+#include "../Config.h"
 
-namespace TorchShadowLimiter {
+namespace ActorShadowLimiter {
 
     void ConsolePrint(const char* format, ...) {
         auto* console = RE::ConsoleLog::GetSingleton();
@@ -32,24 +32,6 @@ namespace TorchShadowLimiter {
         va_end(args);
 
         console->Print("[DEBUG] %s", buffer);
-    }
-
-    bool HasMagicEffect(RE::Actor* actor, RE::FormID effectFormID) {
-        if (!actor) {
-            return false;
-        }
-
-        auto* effect = RE::TESForm::LookupByID<RE::EffectSetting>(effectFormID);
-        if (!effect) {
-            return false;
-        }
-
-        auto* magicTarget = actor->GetMagicTarget();
-        if (!magicTarget) {
-            return false;
-        }
-
-        return magicTarget->HasMagicEffect(effect);
     }
 
 }

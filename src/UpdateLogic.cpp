@@ -5,13 +5,14 @@
 
 #include "Config.h"
 #include "Globals.h"
-#include "Helper.h"
-#include "LightHelpers.h"
+#include "LightManager.h"
 #include "SKSE/SKSE.h"
-#include "ShadowCounter.h"
-#include "TorchManager.h"
+#include "utils/Console.h"
+#include "utils/Light.h"
+#include "utils/MagicEffect.h"
+#include "utils/ShadowCounter.h"
 
-namespace TorchShadowLimiter {
+namespace ActorShadowLimiter {
 
     void UpdatePlayerLightShadows() {
         auto* player = RE::PlayerCharacter::GetSingleton();
@@ -40,9 +41,12 @@ namespace TorchShadowLimiter {
         bool wantShadows = (shadowLightCount < g_config.shadowLightLimit);
 
         // ============ Hand-Held Lights Logic ============
-        for (uint32_t lightFormId : g_activeHandHeldLights) {
-            auto* lightBase = GetPlayerTorchBase(player);
-            if (lightBase && lightBase->GetFormID() == lightFormId) {
+        auto* lightBase = GetEquippedLight(player);
+        if (lightBase) {
+            uint32_t lightFormId = lightBase->GetFormID();
+
+            // Check if this equipped light is one we're tracking
+            if (g_activeHandHeldLights.find(lightFormId) != g_activeHandHeldLights.end()) {
                 // Only update if state changed from last known state
                 bool lastState = g_lastShadowStates[lightFormId];
                 if (wantShadows != lastState) {
@@ -63,7 +67,7 @@ namespace TorchShadowLimiter {
                     SetLightTypeNative(lightBase, newType);
 
                     // Force re-equip to update the reference
-                    ForceReequipTorch(player);
+                    ForceReequipLight(player);
 
                     // Adjust light position after re-equip
                     std::thread([lightFormId]() {
@@ -74,7 +78,7 @@ namespace TorchShadowLimiter {
                             tasks->AddTask([lightFormId]() {
                                 auto* pl = RE::PlayerCharacter::GetSingleton();
                                 if (pl) {
-                                    AdjustTorchLightPosition(pl);
+                                    AdjustLightPosition(pl);
                                 }
                             });
                         }
@@ -96,8 +100,8 @@ namespace TorchShadowLimiter {
                 auto* assocForm = effect->baseEffect->data.associatedForm;
                 if (!assocForm) continue;
 
-                auto* lightBase = assocForm->As<RE::TESObjectLIGH>();
-                if (!lightBase) continue;
+                auto* spellLightBase = assocForm->As<RE::TESObjectLIGH>();
+                if (!spellLightBase) continue;
 
                 uint32_t effectFormId = effect->baseEffect->GetFormID();
                 bool isActive = HasMagicEffect(player, effectFormId);
@@ -110,7 +114,7 @@ namespace TorchShadowLimiter {
                                    wantShadows ? "ENABLE" : "DISABLE", shadowLightCount);
 
                         // Get current light type to remember original
-                        uint8_t currentLightType = static_cast<uint8_t>(GetLightType(lightBase));
+                        uint8_t currentLightType = static_cast<uint8_t>(GetLightType(spellLightBase));
 
                         // Remember the original type
                         if (g_originalLightTypes.find(spellFormId) == g_originalLightTypes.end()) {
@@ -120,21 +124,21 @@ namespace TorchShadowLimiter {
                         // Modify the base form
                         uint8_t newType = wantShadows ? static_cast<uint8_t>(LightType::OmniShadow)
                                                       : static_cast<uint8_t>(LightType::OmniNS);
-                        SetLightTypeNative(lightBase, newType);
+                        SetLightTypeNative(spellLightBase, newType);
 
                         // Recast the spell
                         player->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)
                             ->CastSpellImmediate(spell, false, player, 1.0f, false, 0.0f, nullptr);
 
                         // Restore base form after delay
-                        std::thread([lightBase, spellFormId]() {
+                        std::thread([spellLightBase, spellFormId]() {
                             using namespace std::chrono_literals;
                             std::this_thread::sleep_for(1s);
 
                             if (auto* tasks = SKSE::GetTaskInterface()) {
-                                tasks->AddTask([lightBase, spellFormId]() {
+                                tasks->AddTask([spellLightBase, spellFormId]() {
                                     uint32_t originalType = g_originalLightTypes[spellFormId];
-                                    SetLightTypeNative(lightBase, originalType);
+                                    SetLightTypeNative(spellLightBase, originalType);
                                     DebugPrint("Restored spell 0x%08X base form to original type: %u", spellFormId,
                                                originalType);
                                 });
@@ -149,6 +153,13 @@ namespace TorchShadowLimiter {
     }
 
     void StartShadowPollThread() {
+        // Check if thread is already running
+        bool expected = false;
+        if (!g_pollThreadRunning.compare_exchange_strong(expected, true)) {
+            // Thread is already running
+            return;
+        }
+
         std::thread([]() {
             using namespace std::chrono_literals;
 
@@ -160,7 +171,7 @@ namespace TorchShadowLimiter {
                 }
             }
         }).detach();
-        DebugPrint("Torch poll thread started (%ds interval)", g_config.pollIntervalSeconds);
+        DebugPrint("Shadow poll thread started (%ds interval)", g_config.pollIntervalSeconds);
     }
 
 }

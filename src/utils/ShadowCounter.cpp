@@ -1,10 +1,10 @@
 #include "ShadowCounter.h"
 
-#include "Config.h"
-#include "Helper.h"
+#include "../Config.h"
+#include "Console.h"
 #include "SKSE/SKSE.h"
 
-namespace TorchShadowLimiter {
+namespace ActorShadowLimiter {
 
     int CountNearbyShadowLights() {
         auto* player = RE::PlayerCharacter::GetSingleton();

@@ -1,12 +1,13 @@
 #pragma once
 
+#include <atomic>
 #include <map>
 #include <mutex>
 #include <set>
 
 #include "RE/Skyrim.h"
 
-namespace TorchShadowLimiter {
+namespace ActorShadowLimiter {
 
     using FLAGS = RE::TES_LIGHT_FLAGS;
 
@@ -26,6 +27,7 @@ namespace TorchShadowLimiter {
     extern std::map<uint32_t, uint32_t> g_originalLightTypes;  // FormID -> original light type
     extern std::map<uint32_t, bool> g_lastShadowStates;        // FormID -> last shadow enabled state
     extern bool g_isReequipping;
+    extern std::atomic<bool> g_pollThreadRunning;
 
     // Mutex for thread-safe light modifications
     extern std::mutex g_lightModificationMutex;

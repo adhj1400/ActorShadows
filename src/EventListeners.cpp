@@ -2,13 +2,14 @@
 
 #include "Config.h"
 #include "Globals.h"
-#include "Helper.h"
-#include "LightHelpers.h"
+#include "LightManager.h"
 #include "SKSE/SKSE.h"
-#include "TorchManager.h"
 #include "UpdateLogic.h"
+#include "utils/Console.h"
+#include "utils/Light.h"
+#include "utils/MagicEffect.h"
 
-namespace TorchShadowLimiter {
+namespace ActorShadowLimiter {
 
     // ============ EquipListener ============
 
@@ -89,7 +90,7 @@ namespace TorchShadowLimiter {
                 tasks->AddTask([]() {
                     auto* pl = RE::PlayerCharacter::GetSingleton();
                     if (pl) {
-                        AdjustTorchLightPosition(pl);
+                        AdjustLightPosition(pl);
                     }
                 });
             }
@@ -197,7 +198,7 @@ namespace TorchShadowLimiter {
                 tasks->AddTask([player]() {
                     // Check for configured hand-held lights
                     bool hasConfiguredLight = false;
-                    auto* lightBase = GetPlayerTorchBase(player);
+                    auto* lightBase = GetEquippedLight(player);
                     if (lightBase) {
                         uint32_t lightFormId = lightBase->GetFormID();
                         for (const auto& config : g_config.handHeldLights) {
@@ -259,7 +260,7 @@ namespace TorchShadowLimiter {
 
                         // Force re-equip and position adjustment for hand-held lights
                         if (hasConfiguredLight) {
-                            ForceReequipTorch(player);
+                            ForceReequipLight(player);
 
                             std::thread([]() {
                                 using namespace std::chrono_literals;
@@ -269,7 +270,7 @@ namespace TorchShadowLimiter {
                                     tasks->AddTask([]() {
                                         auto* pl = RE::PlayerCharacter::GetSingleton();
                                         if (pl) {
-                                            AdjustTorchLightPosition(pl);
+                                            AdjustLightPosition(pl);
                                         }
                                     });
                                 }

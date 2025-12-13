@@ -1,6 +1,6 @@
 #pragma once
 
-namespace TorchShadowLimiter {
+namespace ActorShadowLimiter {
 
     void UpdatePlayerLightShadows();
     void StartShadowPollThread();

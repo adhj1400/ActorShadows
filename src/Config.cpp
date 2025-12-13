@@ -3,9 +3,9 @@
 #include <fstream>
 #include <sstream>
 
-#include "Helper.h"
+#include "utils/Console.h"
 
-namespace TorchShadowLimiter {
+namespace ActorShadowLimiter {
 
     Config g_config;
 
@@ -169,9 +169,8 @@ namespace TorchShadowLimiter {
         }
 
         file.close();
-        DebugPrint("ActorShadows config loaded: NodeName=%s, Offset=(%.1f, %.1f, %.1f), ShadowLimit=%d, Debug=%s",
-                   g_config.torchLightNodeName.c_str(), g_config.torchLightOffsetX, g_config.torchLightOffsetY,
-                   g_config.torchLightOffsetZ, g_config.shadowLightLimit, g_config.enableDebug ? "ON" : "OFF");
+        DebugPrint("ActorShadows config loaded: ShadowLimit=%d, SearchRadius=%.1f, Debug=%s", g_config.shadowLightLimit,
+                   g_config.searchRadius, g_config.enableDebug ? "ON" : "OFF");
     }
 
     void BuildEffectToSpellMapping() {

@@ -1,7 +1,7 @@
 #pragma once
 #include "SKSE/SKSE.h"
 
-namespace TorchShadowLimiter {
+namespace ActorShadowLimiter {
 
     class EquipListener : public RE::BSTEventSink<RE::TESEquipEvent> {
     public:

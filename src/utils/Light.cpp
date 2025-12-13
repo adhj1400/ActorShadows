@@ -1,8 +1,8 @@
-#include "LightHelpers.h"
+#include "Light.h"
 
-#include "Globals.h"
+#include "../Globals.h"
 
-namespace TorchShadowLimiter {
+namespace ActorShadowLimiter {
 
     std::uint32_t GetLightType(const RE::TESObjectLIGH* a_light) {
         if (!a_light) {
