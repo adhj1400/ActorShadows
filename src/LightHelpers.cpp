@@ -65,4 +65,4 @@ namespace TorchShadowLimiter {
         }
     }
 
-}  // namespace TorchShadowLimiter
+}

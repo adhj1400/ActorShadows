@@ -3,7 +3,9 @@
 #include <chrono>
 #include <thread>
 
+#include "Config.h"
 #include "Globals.h"
+#include "Helper.h"
 #include "LightHelpers.h"
 #include "SKSE/SKSE.h"
 #include "ShadowCounter.h"
@@ -21,7 +23,7 @@ namespace TorchShadowLimiter {
         int shadowLightCount = CountNearbyShadowLights();
 
         // Decide on desired state
-        bool wantShadows = (shadowLightCount < 4);
+        bool wantShadows = (shadowLightCount < g_config.shadowLightLimit);
 
         // ============ Torch Logic ============
         if (g_pollTorch) {
@@ -29,10 +31,8 @@ namespace TorchShadowLimiter {
             if (torchBase) {
                 // Only update if state changed from last known state
                 if (wantShadows != g_lastShadowEnabled) {
-                    if (auto* console = RE::ConsoleLog::GetSingleton()) {
-                        console->Print("Torch shadow state changed: %s (shadow lights: %d)",
-                                       wantShadows ? "ENABLE" : "DISABLE", shadowLightCount);
-                    }
+                    DebugPrint("Torch shadow state changed: %s (shadow lights: %d)", wantShadows ? "ENABLE" : "DISABLE",
+                               shadowLightCount);
 
                     // Get current light type to remember original
                     uint8_t currentLightType = static_cast<uint8_t>(GetLightType(torchBase));
@@ -96,10 +96,8 @@ namespace TorchShadowLimiter {
                 if (candlelightLight) {
                     // Only update if state changed from last known state
                     if (wantShadows != g_lastCandlelightShadowEnabled) {
-                        if (auto* console = RE::ConsoleLog::GetSingleton()) {
-                            console->Print("Candlelight shadow state changed: %s (shadow lights: %d)",
-                                           wantShadows ? "ENABLE" : "DISABLE", shadowLightCount);
-                        }
+                        DebugPrint("Candlelight shadow state changed: %s (shadow lights: %d)",
+                                   wantShadows ? "ENABLE" : "DISABLE", shadowLightCount);
 
                         // Get current light type to remember original
                         uint8_t currentLightType = static_cast<uint8_t>(GetLightType(candlelightLight));
@@ -129,11 +127,8 @@ namespace TorchShadowLimiter {
                             if (auto* tasks = SKSE::GetTaskInterface()) {
                                 tasks->AddTask([candlelightLight]() {
                                     SetLightTypeNative(candlelightLight, g_originalCandlelightLightType);
-
-                                    if (auto* console = RE::ConsoleLog::GetSingleton()) {
-                                        console->Print("Restored Candlelight base form to original type: %u",
-                                                       g_originalCandlelightLightType);
-                                    }
+                                    DebugPrint("Restored Candlelight base form to original type: %u",
+                                               g_originalCandlelightLightType);
                                 });
                             }
                         }).detach();
@@ -150,17 +145,14 @@ namespace TorchShadowLimiter {
             using namespace std::chrono_literals;
 
             while (true) {
-                std::this_thread::sleep_for(5s);
+                std::this_thread::sleep_for(std::chrono::seconds(g_config.pollIntervalSeconds));
 
                 if (auto* tasks = SKSE::GetTaskInterface()) {
                     tasks->AddTask([]() { UpdateTorchShadowState_Native(); });
                 }
             }
         }).detach();
-
-        if (auto* console = RE::ConsoleLog::GetSingleton()) {
-            console->Print("Torch poll thread started (5s interval)");
-        }
+        DebugPrint("Torch poll thread started (%ds interval)", g_config.pollIntervalSeconds);
     }
 
 }

@@ -3,7 +3,9 @@
 #include <chrono>
 #include <thread>
 
+#include "Config.h"
 #include "Globals.h"
+#include "Helper.h"
 #include "LightHelpers.h"
 #include "SKSE/SKSE.h"
 
@@ -49,59 +51,28 @@ namespace TorchShadowLimiter {
             return;
         }
 
-        // Which hand is it in?
-        bool inLeft = (player->GetEquippedObject(true) == torchBase);
-        bool inRight = (player->GetEquippedObject(false) == torchBase);
-
-        if (!inLeft && !inRight) {
-            return;
-        }
-
-        // Pick the slot based on hand
+        // Torch is always in left hand
         RE::BGSEquipSlot* slot = nullptr;
         if (auto* dom = RE::BGSDefaultObjectManager::GetSingleton()) {
-            if (inLeft) {
-                slot = dom->GetObject<RE::BGSEquipSlot>(RE::DEFAULT_OBJECT::kLeftHandEquip);
-            } else {
-                slot = dom->GetObject<RE::BGSEquipSlot>(RE::DEFAULT_OBJECT::kRightHandEquip);
-            }
+            slot = dom->GetObject<RE::BGSEquipSlot>(RE::DEFAULT_OBJECT::kLeftHandEquip);
         }
 
         g_isReequippingTorch = true;
 
-        // Base form already modified by caller, just re-equip
-        equipManager->UnequipObject(player, torchBase,
-                                    nullptr,  // extraData
-                                    1,        // count
-                                    slot,     // equip slot
-                                    true,     // queueEquip
-                                    false,    // forceEquip
-                                    false,    // playSound
-                                    false,    // applyNow / locked
-                                    nullptr   // unknown / disarm? (depends on version)
-        );
-
-        equipManager->EquipObject(player, torchBase,
-                                  nullptr,  // extraData
-                                  1, slot,
-                                  true,    // queueEquip
-                                  false,   // forceEquip
-                                  false,   // playSound
-                                  false);  // applyNow / locked
+        equipManager->UnequipObject(player, torchBase, nullptr, 1, slot, true, false, false, false, nullptr);
+        equipManager->EquipObject(player, torchBase, nullptr, 1, slot, true, false, false, false);
 
         // Restore base form after a delay so the reference keeps shadows but base form doesn't
         std::thread([torchBase]() {
             using namespace std::chrono_literals;
-            std::this_thread::sleep_for(200ms);  // Short delay for torch to spawn
+            std::this_thread::sleep_for(2s);  // Longer delay to ensure reference is fully created with shadows
 
             if (auto* tasks = SKSE::GetTaskInterface()) {
                 tasks->AddTask([torchBase]() {
                     SetLightTypeNative(torchBase, g_originalTorchLightType);
                     g_isReequippingTorch = false;
 
-                    if (auto* console = RE::ConsoleLog::GetSingleton()) {
-                        console->Print("Restored base form to original type: %u", g_originalTorchLightType);
-                    }
+                    DebugPrint("Restored base form to original type: %u", g_originalTorchLightType);
                 });
             } else {
                 g_isReequippingTorch = false;
@@ -115,10 +86,12 @@ namespace TorchShadowLimiter {
         auto* root3D = player->Get3D(false);
         if (!root3D) return;
 
-        RE::NiAVObject* lightNode = root3D->GetObjectByName("AttachLight");
+        RE::NiAVObject* lightNode = root3D->GetObjectByName(g_config.torchLightNodeName.c_str());
         if (lightNode) {
-            // Move the light upward (Y axis because node rotation is flipped)
-            lightNode->local.translate.y += 20.0f;
+            // Move the light (Y axis because node rotation is flipped)
+            lightNode->local.translate.x += g_config.torchLightOffsetX;
+            lightNode->local.translate.y += g_config.torchLightOffsetY;
+            lightNode->local.translate.z += g_config.torchLightOffsetZ;
 
             // Update the node
             RE::NiUpdateData updateData;
@@ -126,4 +99,4 @@ namespace TorchShadowLimiter {
         }
     }
 
-}  // namespace TorchShadowLimiter
+}

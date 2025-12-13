@@ -35,4 +35,4 @@ namespace TorchShadowLimiter {
     // Mutex for thread-safe light modifications
     extern std::mutex g_lightModificationMutex;
 
-}  // namespace TorchShadowLimiter
+}

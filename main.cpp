@@ -1,6 +1,8 @@
 #include "SKSE/SKSE.h"
+#include "src/Config.h"
 #include "src/EventListeners.h"
 #include "src/Globals.h"
+#include "src/Helper.h"
 #include "src/UpdateLogic.h"
 
 using namespace SKSE;
@@ -11,9 +13,9 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
 
     SKSE::GetMessagingInterface()->RegisterListener([](SKSE::MessagingInterface::Message* message) {
         if (message->type == SKSE::MessagingInterface::kDataLoaded) {
-            if (auto* console = RE::ConsoleLog::GetSingleton()) {
-                console->Print("PlayerShadows.dll loaded");
-            }
+            LoadConfig();
+
+            ConsolePrint("PlayerShadows.dll loaded");
 
             EquipListener::Install();
             SpellCastListener::Install();

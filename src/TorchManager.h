@@ -8,4 +8,4 @@ namespace TorchShadowLimiter {
     void ForceReequipTorch(RE::PlayerCharacter* player);
     void AdjustTorchLightPosition(RE::PlayerCharacter* player);
 
-}  // namespace TorchShadowLimiter
+}

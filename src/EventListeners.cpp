@@ -1,6 +1,7 @@
 #include "EventListeners.h"
 
 #include "Globals.h"
+#include "Helper.h"
 #include "LightHelpers.h"
 #include "SKSE/SKSE.h"
 #include "TorchManager.h"
@@ -19,9 +20,7 @@ namespace TorchShadowLimiter {
         auto* eventSource = RE::ScriptEventSourceHolder::GetSingleton();
         if (eventSource) {
             eventSource->AddEventSink<RE::TESEquipEvent>(GetSingleton());
-            if (auto* console = RE::ConsoleLog::GetSingleton()) {
-                console->Print("EquipListener installed.");
-            }
+            DebugPrint("EquipListener installed.");
         }
     }
 
@@ -50,9 +49,7 @@ namespace TorchShadowLimiter {
             return RE::BSEventNotifyControl::kContinue;
         }
 
-        if (auto* console = RE::ConsoleLog::GetSingleton()) {
-            console->Print("Torch equipped. Starting polling and adjusting position.");
-        }
+        DebugPrint("Torch equipped. Starting polling and adjusting position.");
 
         // Torch and Candlelight are mutually exclusive
         g_pollCandlelight = false;
@@ -70,7 +67,7 @@ namespace TorchShadowLimiter {
         // Adjust light position after a short delay to ensure the light node is available
         std::thread([]() {
             using namespace std::chrono_literals;
-            std::this_thread::sleep_for(200ms);
+            std::this_thread::sleep_for(500ms);
 
             if (auto* tasks = SKSE::GetTaskInterface()) {
                 tasks->AddTask([]() {
@@ -96,9 +93,7 @@ namespace TorchShadowLimiter {
         auto* eventSource = RE::ScriptEventSourceHolder::GetSingleton();
         if (eventSource) {
             eventSource->AddEventSink<RE::TESSpellCastEvent>(GetSingleton());
-            if (auto* console = RE::ConsoleLog::GetSingleton()) {
-                console->Print("SpellCastListener installed.");
-            }
+            DebugPrint("SpellCastListener installed.");
         }
     }
 
@@ -120,9 +115,7 @@ namespace TorchShadowLimiter {
 
         // Check if this is the Candlelight spell
         if (spell->GetFormID() == kCandlelightSpell) {
-            if (auto* console = RE::ConsoleLog::GetSingleton()) {
-                console->Print("Candlelight cast detected. Starting polling.");
-            }
+            DebugPrint("Candlelight cast detected. Starting polling.");
 
             // Torch and Candlelight are mutually exclusive
             g_pollTorch = false;
@@ -152,9 +145,7 @@ namespace TorchShadowLimiter {
         auto* eventSource = RE::ScriptEventSourceHolder::GetSingleton();
         if (eventSource) {
             eventSource->AddEventSink<RE::TESCellFullyLoadedEvent>(GetSingleton());
-            if (auto* console = RE::ConsoleLog::GetSingleton()) {
-                console->Print("CellListener installed.");
-            }
+            DebugPrint("CellListener installed.");
         }
     }
 
@@ -172,7 +163,7 @@ namespace TorchShadowLimiter {
         // Delay check to allow equipment to fully load
         std::thread([player]() {
             using namespace std::chrono_literals;
-            std::this_thread::sleep_for(500ms);
+            std::this_thread::sleep_for(200ms);
 
             if (auto* tasks = SKSE::GetTaskInterface()) {
                 tasks->AddTask([player]() {
@@ -181,9 +172,7 @@ namespace TorchShadowLimiter {
                     auto* torchBase = GetPlayerTorchBase(player);
                     if (torchBase) {
                         hasTorch = true;
-                        if (auto* console = RE::ConsoleLog::GetSingleton()) {
-                            console->Print("CellListener: Torch detected (FormID: %08X)", torchBase->GetFormID());
-                        }
+                        DebugPrint("CellListener: Torch detected (FormID: %08X)", torchBase->GetFormID());
                     }
 
                     // Check if Candlelight is active
@@ -205,10 +194,7 @@ namespace TorchShadowLimiter {
 
                     // Only scan if player has torch or Candlelight
                     if (hasTorch || hasCandlelight) {
-                        if (auto* console = RE::ConsoleLog::GetSingleton()) {
-                            console->Print(
-                                "Cell fully loaded. Player has torch/Candlelight - rechecking shadow state.");
-                        }
+                        DebugPrint("Cell fully loaded. Player has torch/Candlelight - rechecking shadow state.");
 
                         // Update polling flags and reset original types
                         if (hasTorch) {
@@ -247,9 +233,7 @@ namespace TorchShadowLimiter {
                             }).detach();
                         }
                     } else {
-                        if (auto* console = RE::ConsoleLog::GetSingleton()) {
-                            console->Print("Cell fully loaded. Player has no torch/Candlelight - skipping scan.");
-                        }
+                        DebugPrint("Cell fully loaded. Player has no torch/Candlelight - skipping scan.");
                     }
                 });
             }
@@ -258,4 +242,4 @@ namespace TorchShadowLimiter {
         return RE::BSEventNotifyControl::kContinue;
     }
 
-}  // namespace TorchShadowLimiter
+}

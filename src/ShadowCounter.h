@@ -4,4 +4,4 @@ namespace TorchShadowLimiter {
 
     int CountNearbyShadowLights();
 
-}  // namespace TorchShadowLimiter
+}

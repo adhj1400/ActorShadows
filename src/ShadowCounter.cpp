@@ -61,4 +61,4 @@ namespace TorchShadowLimiter {
         return shadowLightCount;
     }
 
-}  // namespace TorchShadowLimiter
+}

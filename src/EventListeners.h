@@ -30,4 +30,4 @@ namespace TorchShadowLimiter {
                                               RE::BSTEventSource<RE::TESCellFullyLoadedEvent>* source) override;
     };
 
-}  // namespace TorchShadowLimiter
+}

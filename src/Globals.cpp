@@ -10,4 +10,5 @@ namespace TorchShadowLimiter {
     std::uint32_t g_originalCandlelightLightType = 255;
     bool g_isReequippingTorch = false;
     std::mutex g_lightModificationMutex;
-}  // namespace TorchShadowLimiter
+
+}
