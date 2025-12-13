@@ -12,6 +12,8 @@ namespace TorchShadowLimiter {
         int shadowLightLimit = 4;
         bool enableDebug = false;
         int pollIntervalSeconds = 5;
+        bool enableInterior = true;
+        bool enableExterior = true;
     };
 
     extern Config g_config;

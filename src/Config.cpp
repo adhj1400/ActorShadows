@@ -60,6 +60,10 @@ namespace TorchShadowLimiter {
                 } catch (...) {
                     // Keep default
                 }
+            } else if (key == "EnableInterior") {
+                g_config.enableInterior = (value == "true" || value == "1" || value == "True" || value == "TRUE");
+            } else if (key == "EnableExterior") {
+                g_config.enableExterior = (value == "true" || value == "1" || value == "True" || value == "TRUE");
             }
         }
 

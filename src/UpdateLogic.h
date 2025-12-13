@@ -2,7 +2,7 @@
 
 namespace TorchShadowLimiter {
 
-    void UpdateTorchShadowState_Native();
+    void UpdatePlayerLightShadows();
     void StartTorchPollThread();
 
 }

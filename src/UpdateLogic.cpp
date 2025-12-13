@@ -13,9 +13,23 @@
 
 namespace TorchShadowLimiter {
 
-    void UpdateTorchShadowState_Native() {
+    void UpdatePlayerLightShadows() {
         auto* player = RE::PlayerCharacter::GetSingleton();
         if (!player) {
+            return;
+        }
+
+        auto* cell = player->GetParentCell();
+        if (!cell) {
+            return;
+        }
+
+        // Check if functionality is enabled for this cell type
+        bool isExterior = cell->IsExteriorCell();
+        if (isExterior && !g_config.enableExterior) {
+            return;
+        }
+        if (!isExterior && !g_config.enableInterior) {
             return;
         }
 
@@ -148,7 +162,7 @@ namespace TorchShadowLimiter {
                 std::this_thread::sleep_for(std::chrono::seconds(g_config.pollIntervalSeconds));
 
                 if (auto* tasks = SKSE::GetTaskInterface()) {
-                    tasks->AddTask([]() { UpdateTorchShadowState_Native(); });
+                    tasks->AddTask([]() { UpdatePlayerLightShadows(); });
                 }
             }
         }).detach();

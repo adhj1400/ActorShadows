@@ -62,7 +62,7 @@ namespace TorchShadowLimiter {
         StartTorchPollThread();
 
         // Immediate check
-        UpdateTorchShadowState_Native();
+        UpdatePlayerLightShadows();
 
         // Adjust light position after a short delay to ensure the light node is available
         std::thread([]() {
@@ -128,7 +128,7 @@ namespace TorchShadowLimiter {
             StartTorchPollThread();
 
             // Immediate check
-            UpdateTorchShadowState_Native();
+            UpdatePlayerLightShadows();
         }
 
         return RE::BSEventNotifyControl::kContinue;
@@ -212,7 +212,7 @@ namespace TorchShadowLimiter {
                         StartTorchPollThread();
 
                         // Immediate check
-                        UpdateTorchShadowState_Native();
+                        UpdatePlayerLightShadows();
 
                         // Force re-equip and position adjustment for torch
                         if (hasTorch) {

@@ -1,5 +1,6 @@
 #include "ShadowCounter.h"
 
+#include "Helper.h"
 #include "SKSE/SKSE.h"
 
 namespace TorchShadowLimiter {
@@ -20,44 +21,72 @@ namespace TorchShadowLimiter {
         int shadowLightCount = 0;
         constexpr float searchRadius = 6000.0f;  // Skyrim units, larger range
 
-        // Iterate references in the cell
-        cell->ForEachReference([&](RE::TESObjectREFR& ref) {
-            auto* lightBase = ref.GetBaseObject();
-            if (!lightBase || lightBase->GetFormType() != RE::FormType::Light) {
-                return RE::BSContainer::ForEachResult::kContinue;
+        // Lambda to count shadow lights in a cell
+        auto countInCell = [&](RE::TESObjectCELL* targetCell) {
+            if (!targetCell) {
+                return;
             }
 
-            // Grab the base record
-            auto* lightBaseObj = lightBase->As<RE::TESObjectLIGH>();
-            if (!lightBaseObj) {
+            targetCell->ForEachReference([&](RE::TESObjectREFR& ref) {
+                auto* lightBase = ref.GetBaseObject();
+                if (!lightBase || lightBase->GetFormType() != RE::FormType::Light) {
+                    return RE::BSContainer::ForEachResult::kContinue;
+                }
+
+                // Grab the base record
+                auto* lightBaseObj = lightBase->As<RE::TESObjectLIGH>();
+                if (!lightBaseObj) {
+                    return RE::BSContainer::ForEachResult::kContinue;
+                }
+
+                // Check if it has shadow flags
+                const auto& flags = lightBaseObj->data.flags;
+                bool isShadowLight = flags.any(RE::TES_LIGHT_FLAGS::kHemiShadow) ||
+                                     flags.any(RE::TES_LIGHT_FLAGS::kOmniShadow) ||
+                                     flags.any(RE::TES_LIGHT_FLAGS::kSpotShadow);
+
+                if (isShadowLight) {
+                    // Check distance
+                    RE::NiPoint3 lightPos = ref.GetPosition();
+                    float dx = lightPos.x - playerPos.x;
+                    float dy = lightPos.y - playerPos.y;
+                    float dz = lightPos.z - playerPos.z;
+                    float distSq = dx * dx + dy * dy + dz * dz;
+
+                    if (distSq <= (searchRadius * searchRadius)) {
+                        ++shadowLightCount;
+                    }
+                }
+
                 return RE::BSContainer::ForEachResult::kContinue;
-            }
+            });
+        };
 
-            // Check the light type
-            uint8_t lightType = (uint8_t)lightBaseObj->data.flags.underlying();
-            // Common bit flags:
-            // 1 = Hemisphere Shadow Light
-            // 3 = Omni Shadow Light (most shadow lights)
-            // 5 = Spot Shadow Light
+        // Count lights in the current cell
+        countInCell(cell);
 
-            bool isShadowLight = (lightType == 1 || lightType == 3 || lightType == 5);
-
-            if (isShadowLight) {
-                // Check distance
-                RE::NiPoint3 lightPos = ref.GetPosition();
-                float dx = lightPos.x - playerPos.x;
-                float dy = lightPos.y - playerPos.y;
-                float dz = lightPos.z - playerPos.z;
-                float distSq = dx * dx + dy * dy + dz * dz;
-
-                if (distSq <= (searchRadius * searchRadius)) {
-                    ++shadowLightCount;
+        // If in exterior, also check neighboring cells
+        if (cell->IsExteriorCell()) {
+            DebugPrint("Exterior cell detected, checking grid cells");
+            auto* tes = RE::TES::GetSingleton();
+            if (tes && tes->interiorCell == nullptr) {
+                // Get the grid of loaded cells around the player
+                auto* gridCells = tes->gridCells;
+                if (gridCells) {
+                    DebugPrint("Grid cells available, length: %u", gridCells->length);
+                    for (uint32_t x = 0; x < gridCells->length; ++x) {
+                        for (uint32_t y = 0; y < gridCells->length; ++y) {
+                            auto* gridCell = gridCells->GetCell(x, y);
+                            if (gridCell && gridCell != cell) {
+                                countInCell(gridCell);
+                            }
+                        }
+                    }
                 }
             }
+        }
 
-            return RE::BSContainer::ForEachResult::kContinue;
-        });
-
+        DebugPrint("Total shadow lights found: %d", shadowLightCount);
         return shadowLightCount;
     }
 
