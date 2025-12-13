@@ -2,13 +2,11 @@
 
 namespace TorchShadowLimiter {
 
-    bool g_lastShadowEnabled = false;
-    bool g_lastCandlelightShadowEnabled = false;
-    bool g_pollTorch = false;
-    bool g_pollCandlelight = false;
-    std::uint32_t g_originalTorchLightType = 255;
-    std::uint32_t g_originalCandlelightLightType = 255;
-    bool g_isReequippingTorch = false;
+    std::set<uint32_t> g_activeHandHeldLights;
+    std::set<uint32_t> g_activeSpells;
+    std::map<uint32_t, uint32_t> g_originalLightTypes;
+    std::map<uint32_t, bool> g_lastShadowStates;
+    bool g_isReequipping = false;
     std::mutex g_lightModificationMutex;
 
 }

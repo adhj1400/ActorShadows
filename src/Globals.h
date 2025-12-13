@@ -1,6 +1,8 @@
 #pragma once
 
+#include <map>
 #include <mutex>
+#include <set>
 
 #include "RE/Skyrim.h"
 
@@ -18,18 +20,12 @@ namespace TorchShadowLimiter {
         SpotShadow = 5   // Spotlight with shadow
     };
 
-    // FormIDs
-    constexpr RE::FormID kCandlelightEffect = 0x0001EA6C;
-    constexpr RE::FormID kCandlelightSpell = 0x00043324;
-
-    // Global state
-    extern bool g_lastShadowEnabled;
-    extern bool g_lastCandlelightShadowEnabled;
-    extern bool g_pollTorch;
-    extern bool g_pollCandlelight;
-    extern std::uint32_t g_originalTorchLightType;
-    extern std::uint32_t g_originalCandlelightLightType;
-    extern bool g_isReequippingTorch;
+    // Global state - generalized for any lights/spells
+    extern std::set<uint32_t> g_activeHandHeldLights;          // Currently equipped hand-held lights (by FormID)
+    extern std::set<uint32_t> g_activeSpells;                  // Currently active spell effects (by FormID)
+    extern std::map<uint32_t, uint32_t> g_originalLightTypes;  // FormID -> original light type
+    extern std::map<uint32_t, bool> g_lastShadowStates;        // FormID -> last shadow enabled state
+    extern bool g_isReequipping;
 
     // Mutex for thread-safe light modifications
     extern std::mutex g_lightModificationMutex;

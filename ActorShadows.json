@@ -1,0 +1,17 @@
+{
+  "handHeldLights": [
+    {
+      "formId": "0x0001D4EC",
+      "nodeName": "AttachLight",
+      "offsetX": 1.0,
+      "offsetY": 5.0,
+      "offsetZ": -1.0
+    }
+  ],
+  "spells": [
+    {
+      "formId": "0x00043324",
+      "nodeName": ""
+    }
+  ]
+}

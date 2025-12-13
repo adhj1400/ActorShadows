@@ -14,14 +14,15 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
     SKSE::GetMessagingInterface()->RegisterListener([](SKSE::MessagingInterface::Message* message) {
         if (message->type == SKSE::MessagingInterface::kDataLoaded) {
             LoadConfig();
+            BuildEffectToSpellMapping();
 
-            ConsolePrint("PlayerShadows.dll loaded");
+            ConsolePrint("ActorShadows.dll loaded");
 
             EquipListener::Install();
             SpellCastListener::Install();
             CellListener::Install();
 
-            StartTorchPollThread();
+            StartShadowPollThread();
         }
     });
 

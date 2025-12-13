@@ -34,10 +34,10 @@ namespace TorchShadowLimiter {
     }
 
     void ForceReequipTorch(RE::PlayerCharacter* player) {
-        if (g_isReequippingTorch) {
+        if (g_isReequipping) {
             return;
         }
-        if (!player || g_isReequippingTorch) {
+        if (!player || g_isReequipping) {
             return;
         }
 
@@ -57,25 +57,28 @@ namespace TorchShadowLimiter {
             slot = dom->GetObject<RE::BGSEquipSlot>(RE::DEFAULT_OBJECT::kLeftHandEquip);
         }
 
-        g_isReequippingTorch = true;
+        g_isReequipping = true;
+
+        uint32_t lightFormId = torchBase->GetFormID();
 
         equipManager->UnequipObject(player, torchBase, nullptr, 1, slot, true, false, false, false, nullptr);
         equipManager->EquipObject(player, torchBase, nullptr, 1, slot, true, false, false, false);
 
         // Restore base form after a delay so the reference keeps shadows but base form doesn't
-        std::thread([torchBase]() {
+        std::thread([torchBase, lightFormId]() {
             using namespace std::chrono_literals;
             std::this_thread::sleep_for(2s);  // Longer delay to ensure reference is fully created with shadows
 
             if (auto* tasks = SKSE::GetTaskInterface()) {
-                tasks->AddTask([torchBase]() {
-                    SetLightTypeNative(torchBase, g_originalTorchLightType);
-                    g_isReequippingTorch = false;
-
-                    DebugPrint("Restored base form to original type: %u", g_originalTorchLightType);
+                tasks->AddTask([torchBase, lightFormId]() {
+                    if (g_originalLightTypes.find(lightFormId) != g_originalLightTypes.end()) {
+                        SetLightTypeNative(torchBase, g_originalLightTypes[lightFormId]);
+                        DebugPrint("Restored base form to original type: %u", g_originalLightTypes[lightFormId]);
+                    }
+                    g_isReequipping = false;
                 });
             } else {
-                g_isReequippingTorch = false;
+                g_isReequipping = false;
             }
         }).detach();
     }

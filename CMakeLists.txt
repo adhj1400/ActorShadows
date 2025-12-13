@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(PlayerShadows VERSION 0.0.1 LANGUAGES CXX)
+project(ActorShadows VERSION 0.0.1 LANGUAGES CXX)
 
 if(DEFINED ENV{SKYRIM_FOLDER} AND IS_DIRECTORY "$ENV{SKYRIM_FOLDER}/Data")
     set(OUTPUT_FOLDER "$ENV{SKYRIM_FOLDER}/Data")

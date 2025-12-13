@@ -1,5 +1,6 @@
 #include "ShadowCounter.h"
 
+#include "Config.h"
 #include "Helper.h"
 #include "SKSE/SKSE.h"
 
@@ -19,7 +20,7 @@ namespace TorchShadowLimiter {
         RE::NiPoint3 playerPos = player->GetPosition();
 
         int shadowLightCount = 0;
-        constexpr float searchRadius = 6000.0f;  // Skyrim units, larger range
+        float searchRadius = g_config.searchRadius;
 
         // Lambda to count shadow lights in a cell
         auto countInCell = [&](RE::TESObjectCELL* targetCell) {

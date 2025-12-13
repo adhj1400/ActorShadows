@@ -39,38 +39,39 @@ namespace TorchShadowLimiter {
         // Decide on desired state
         bool wantShadows = (shadowLightCount < g_config.shadowLightLimit);
 
-        // ============ Torch Logic ============
-        if (g_pollTorch) {
-            auto* torchBase = GetPlayerTorchBase(player);
-            if (torchBase) {
+        // ============ Hand-Held Lights Logic ============
+        for (uint32_t lightFormId : g_activeHandHeldLights) {
+            auto* lightBase = GetPlayerTorchBase(player);
+            if (lightBase && lightBase->GetFormID() == lightFormId) {
                 // Only update if state changed from last known state
-                if (wantShadows != g_lastShadowEnabled) {
-                    DebugPrint("Torch shadow state changed: %s (shadow lights: %d)", wantShadows ? "ENABLE" : "DISABLE",
-                               shadowLightCount);
+                bool lastState = g_lastShadowStates[lightFormId];
+                if (wantShadows != lastState) {
+                    DebugPrint("Hand-held light 0x%08X shadow state changed: %s (shadow lights: %d)", lightFormId,
+                               wantShadows ? "ENABLE" : "DISABLE", shadowLightCount);
 
                     // Get current light type to remember original
-                    uint8_t currentLightType = static_cast<uint8_t>(GetLightType(torchBase));
+                    uint8_t currentLightType = static_cast<uint8_t>(GetLightType(lightBase));
 
                     // Remember the original type if we're about to change it
-                    if (g_originalTorchLightType == 255) {
-                        g_originalTorchLightType = currentLightType;
+                    if (g_originalLightTypes.find(lightFormId) == g_originalLightTypes.end()) {
+                        g_originalLightTypes[lightFormId] = currentLightType;
                     }
 
                     // Modify the base form
                     uint8_t newType = wantShadows ? static_cast<uint8_t>(LightType::OmniShadow)
                                                   : static_cast<uint8_t>(LightType::OmniNS);
-                    SetLightTypeNative(torchBase, newType);
+                    SetLightTypeNative(lightBase, newType);
 
                     // Force re-equip to update the reference
                     ForceReequipTorch(player);
 
                     // Adjust light position after re-equip
-                    std::thread([]() {
+                    std::thread([lightFormId]() {
                         using namespace std::chrono_literals;
                         std::this_thread::sleep_for(200ms);
 
                         if (auto* tasks = SKSE::GetTaskInterface()) {
-                            tasks->AddTask([]() {
+                            tasks->AddTask([lightFormId]() {
                                 auto* pl = RE::PlayerCharacter::GetSingleton();
                                 if (pl) {
                                     AdjustTorchLightPosition(pl);
@@ -79,69 +80,75 @@ namespace TorchShadowLimiter {
                         }
                     }).detach();
 
-                    g_lastShadowEnabled = wantShadows;
+                    g_lastShadowStates[lightFormId] = wantShadows;
                 }
             }
         }
 
-        // ============ Candlelight Logic ============
-        if (g_pollCandlelight) {
-            bool candlelightActive = HasMagicEffect(player, kCandlelightEffect);
+        // ============ Spell Lights Logic ============
+        for (uint32_t spellFormId : g_activeSpells) {
+            auto* spell = RE::TESForm::LookupByID<RE::SpellItem>(spellFormId);
+            if (!spell || spell->effects.size() == 0) continue;
 
-            if (candlelightActive) {
-                // Get the light from the magic effect's associated data
-                auto* candlelightEffect = RE::TESForm::LookupByID<RE::EffectSetting>(kCandlelightEffect);
-                auto* candlelightLight =
-                    candlelightEffect ? candlelightEffect->data.associatedForm->As<RE::TESObjectLIGH>() : nullptr;
+            // Find the light-associated effect
+            for (auto* effect : spell->effects) {
+                if (!effect || !effect->baseEffect) continue;
+                auto* assocForm = effect->baseEffect->data.associatedForm;
+                if (!assocForm) continue;
 
-                if (candlelightLight) {
+                auto* lightBase = assocForm->As<RE::TESObjectLIGH>();
+                if (!lightBase) continue;
+
+                uint32_t effectFormId = effect->baseEffect->GetFormID();
+                bool isActive = HasMagicEffect(player, effectFormId);
+
+                if (isActive) {
                     // Only update if state changed from last known state
-                    if (wantShadows != g_lastCandlelightShadowEnabled) {
-                        DebugPrint("Candlelight shadow state changed: %s (shadow lights: %d)",
+                    bool lastState = g_lastShadowStates[spellFormId];
+                    if (wantShadows != lastState) {
+                        DebugPrint("Spell 0x%08X shadow state changed: %s (shadow lights: %d)", spellFormId,
                                    wantShadows ? "ENABLE" : "DISABLE", shadowLightCount);
 
                         // Get current light type to remember original
-                        uint8_t currentLightType = static_cast<uint8_t>(GetLightType(candlelightLight));
+                        uint8_t currentLightType = static_cast<uint8_t>(GetLightType(lightBase));
 
                         // Remember the original type
-                        if (g_originalCandlelightLightType == 255) {
-                            g_originalCandlelightLightType = currentLightType;
+                        if (g_originalLightTypes.find(spellFormId) == g_originalLightTypes.end()) {
+                            g_originalLightTypes[spellFormId] = currentLightType;
                         }
 
                         // Modify the base form
                         uint8_t newType = wantShadows ? static_cast<uint8_t>(LightType::OmniShadow)
                                                       : static_cast<uint8_t>(LightType::OmniNS);
-                        SetLightTypeNative(candlelightLight, newType);
+                        SetLightTypeNative(lightBase, newType);
 
-                        // Recast Candlelight
-                        auto* candlelightSpell = RE::TESForm::LookupByID<RE::SpellItem>(kCandlelightSpell);
-                        if (candlelightSpell) {
-                            player->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)
-                                ->CastSpellImmediate(candlelightSpell, false, player, 1.0f, false, 0.0f, nullptr);
-                        }
+                        // Recast the spell
+                        player->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)
+                            ->CastSpellImmediate(spell, false, player, 1.0f, false, 0.0f, nullptr);
 
                         // Restore base form after delay
-                        std::thread([candlelightLight]() {
+                        std::thread([lightBase, spellFormId]() {
                             using namespace std::chrono_literals;
                             std::this_thread::sleep_for(1s);
 
                             if (auto* tasks = SKSE::GetTaskInterface()) {
-                                tasks->AddTask([candlelightLight]() {
-                                    SetLightTypeNative(candlelightLight, g_originalCandlelightLightType);
-                                    DebugPrint("Restored Candlelight base form to original type: %u",
-                                               g_originalCandlelightLightType);
+                                tasks->AddTask([lightBase, spellFormId]() {
+                                    uint32_t originalType = g_originalLightTypes[spellFormId];
+                                    SetLightTypeNative(lightBase, originalType);
+                                    DebugPrint("Restored spell 0x%08X base form to original type: %u", spellFormId,
+                                               originalType);
                                 });
                             }
                         }).detach();
 
-                        g_lastCandlelightShadowEnabled = wantShadows;
+                        g_lastShadowStates[spellFormId] = wantShadows;
                     }
                 }
             }
         }
     }
 
-    void StartTorchPollThread() {
+    void StartShadowPollThread() {
         std::thread([]() {
             using namespace std::chrono_literals;
 

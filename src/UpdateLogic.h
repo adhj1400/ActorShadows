@@ -3,6 +3,6 @@
 namespace TorchShadowLimiter {
 
     void UpdatePlayerLightShadows();
-    void StartTorchPollThread();
+    void StartShadowPollThread();
 
 }

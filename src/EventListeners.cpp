@@ -1,5 +1,6 @@
 #include "EventListeners.h"
 
+#include "Config.h"
 #include "Globals.h"
 #include "Helper.h"
 #include "LightHelpers.h"
@@ -49,17 +50,32 @@ namespace TorchShadowLimiter {
             return RE::BSEventNotifyControl::kContinue;
         }
 
-        DebugPrint("Torch equipped. Starting polling and adjusting position.");
+        uint32_t lightFormId = lightBase->GetFormID();
 
-        // Torch and Candlelight are mutually exclusive
-        g_pollCandlelight = false;
+        // Check if this light is in our configuration
+        bool isConfigured = false;
+        for (const auto& config : g_config.handHeldLights) {
+            if (config.formId == lightFormId) {
+                isConfigured = true;
+                break;
+            }
+        }
 
-        g_pollTorch = true;
-        g_lastShadowEnabled = false;
-        g_originalTorchLightType = 255;
+        if (!isConfigured) {
+            return RE::BSEventNotifyControl::kContinue;
+        }
+
+        DebugPrint("Configured hand-held light 0x%08X equipped. Starting tracking.", lightFormId);
+
+        // Add to active lights and clear any spell tracking
+        g_activeHandHeldLights.insert(lightFormId);
+        g_activeSpells.clear();
+
+        // Reset state for this light
+        g_lastShadowStates[lightFormId] = false;
 
         // Start polling if not already running
-        StartTorchPollThread();
+        StartShadowPollThread();
 
         // Immediate check
         UpdatePlayerLightShadows();
@@ -113,23 +129,35 @@ namespace TorchShadowLimiter {
             return RE::BSEventNotifyControl::kContinue;
         }
 
-        // Check if this is the Candlelight spell
-        if (spell->GetFormID() == kCandlelightSpell) {
-            DebugPrint("Candlelight cast detected. Starting polling.");
+        uint32_t spellFormId = spell->GetFormID();
 
-            // Torch and Candlelight are mutually exclusive
-            g_pollTorch = false;
-
-            g_pollCandlelight = true;
-            g_lastCandlelightShadowEnabled = false;
-            g_originalCandlelightLightType = 255;
-
-            // Start polling if not already running
-            StartTorchPollThread();
-
-            // Immediate check
-            UpdatePlayerLightShadows();
+        // Check if this spell is in our configuration
+        bool isConfigured = false;
+        for (const auto& config : g_config.spells) {
+            if (config.formId == spellFormId) {
+                isConfigured = true;
+                break;
+            }
         }
+
+        if (!isConfigured) {
+            return RE::BSEventNotifyControl::kContinue;
+        }
+
+        DebugPrint("Configured spell 0x%08X cast detected. Starting tracking.", spellFormId);
+
+        // Add to active spells and clear any hand-held light tracking
+        g_activeSpells.insert(spellFormId);
+        g_activeHandHeldLights.clear();
+
+        // Reset state for this spell
+        g_lastShadowStates[spellFormId] = false;
+
+        // Start polling if not already running
+        StartShadowPollThread();
+
+        // Immediate check
+        UpdatePlayerLightShadows();
 
         return RE::BSEventNotifyControl::kContinue;
     }
@@ -167,55 +195,70 @@ namespace TorchShadowLimiter {
 
             if (auto* tasks = SKSE::GetTaskInterface()) {
                 tasks->AddTask([player]() {
-                    // Check if player has a torch equipped
-                    bool hasTorch = false;
-                    auto* torchBase = GetPlayerTorchBase(player);
-                    if (torchBase) {
-                        hasTorch = true;
-                        DebugPrint("CellListener: Torch detected (FormID: %08X)", torchBase->GetFormID());
-                    }
-
-                    // Check if Candlelight is active
-                    bool hasCandlelight = false;
-                    auto* magicTarget = player->GetMagicTarget();
-                    if (magicTarget) {
-                        auto* activeEffects = magicTarget->GetActiveEffectList();
-                        if (activeEffects) {
-                            for (auto& effect : *activeEffects) {
-                                if (effect && effect->effect && effect->effect->baseEffect) {
-                                    if (effect->effect->baseEffect->GetFormID() == kCandlelightEffect) {
-                                        hasCandlelight = true;
-                                        break;
-                                    }
-                                }
+                    // Check for configured hand-held lights
+                    bool hasConfiguredLight = false;
+                    auto* lightBase = GetPlayerTorchBase(player);
+                    if (lightBase) {
+                        uint32_t lightFormId = lightBase->GetFormID();
+                        for (const auto& config : g_config.handHeldLights) {
+                            if (config.formId == lightFormId) {
+                                hasConfiguredLight = true;
+                                g_activeHandHeldLights.insert(lightFormId);
+                                g_lastShadowStates[lightFormId] = false;
+                                DebugPrint("CellListener: Configured light detected (FormID: 0x%08X)", lightFormId);
+                                break;
                             }
                         }
                     }
 
-                    // Only scan if player has torch or Candlelight
-                    if (hasTorch || hasCandlelight) {
-                        DebugPrint("Cell fully loaded. Player has torch/Candlelight - rechecking shadow state.");
+                    // Check for configured active spells
+                    bool hasConfiguredSpell = false;
+                    auto* magicTarget = player->GetMagicTarget();
+                    if (magicTarget) {
+                        auto* activeEffects = magicTarget->GetActiveEffectList();
+                        if (activeEffects) {
+                            for (const auto& spellConfig : g_config.spells) {
+                                auto* spell = RE::TESForm::LookupByID<RE::SpellItem>(spellConfig.formId);
+                                if (spell && spell->effects.size() > 0) {
+                                    for (auto* effect : spell->effects) {
+                                        if (!effect || !effect->baseEffect) continue;
+                                        uint32_t effectFormId = effect->baseEffect->GetFormID();
 
-                        // Update polling flags and reset original types
-                        if (hasTorch) {
-                            g_pollTorch = true;
-                            g_originalTorchLightType = 255;
-                            g_lastShadowEnabled = false;  // Reset state
+                                        // Check if this effect is active
+                                        for (auto& activeEffect : *activeEffects) {
+                                            if (activeEffect && activeEffect->effect &&
+                                                activeEffect->effect->baseEffect) {
+                                                if (activeEffect->effect->baseEffect->GetFormID() == effectFormId) {
+                                                    hasConfiguredSpell = true;
+                                                    g_activeSpells.insert(spellConfig.formId);
+                                                    g_lastShadowStates[spellConfig.formId] = false;
+                                                    DebugPrint(
+                                                        "CellListener: Configured spell detected (FormID: 0x%08X)",
+                                                        spellConfig.formId);
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                        if (hasConfiguredSpell) break;
+                                    }
+                                }
+                                if (hasConfiguredSpell) break;
+                            }
                         }
-                        if (hasCandlelight) {
-                            g_pollCandlelight = true;
-                            g_originalCandlelightLightType = 255;
-                            g_lastCandlelightShadowEnabled = false;  // Reset state
-                        }
+                    }
+
+                    // Only process if player has configured lights or spells
+                    if (hasConfiguredLight || hasConfiguredSpell) {
+                        DebugPrint("Cell fully loaded. Player has configured light/spell - rechecking shadow state.");
 
                         // Start polling thread
-                        StartTorchPollThread();
+                        StartShadowPollThread();
 
                         // Immediate check
                         UpdatePlayerLightShadows();
 
-                        // Force re-equip and position adjustment for torch
-                        if (hasTorch) {
+                        // Force re-equip and position adjustment for hand-held lights
+                        if (hasConfiguredLight) {
                             ForceReequipTorch(player);
 
                             std::thread([]() {
@@ -233,7 +276,7 @@ namespace TorchShadowLimiter {
                             }).detach();
                         }
                     } else {
-                        DebugPrint("Cell fully loaded. Player has no torch/Candlelight - skipping scan.");
+                        DebugPrint("Cell fully loaded. Player has no configured lights/spells - skipping scan.");
                     }
                 });
             }
