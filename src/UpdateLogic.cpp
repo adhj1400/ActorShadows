@@ -69,21 +69,6 @@ namespace ActorShadowLimiter {
                     // Force re-equip to update the reference
                     ForceReequipLight(player);
 
-                    // Adjust light position after re-equip
-                    std::thread([lightFormId]() {
-                        using namespace std::chrono_literals;
-                        std::this_thread::sleep_for(200ms);
-
-                        if (auto* tasks = SKSE::GetTaskInterface()) {
-                            tasks->AddTask([lightFormId]() {
-                                auto* pl = RE::PlayerCharacter::GetSingleton();
-                                if (pl) {
-                                    AdjustLightPosition(pl);
-                                }
-                            });
-                        }
-                    }).detach();
-
                     g_lastShadowStates[lightFormId] = wantShadows;
                 }
             }
@@ -129,6 +114,21 @@ namespace ActorShadowLimiter {
                         // Recast the spell
                         player->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)
                             ->CastSpellImmediate(spell, false, player, 1.0f, false, 0.0f, nullptr);
+
+                        // // Adjust spell light position after recast
+                        // std::thread([spellFormId]() {
+                        //     using namespace std::chrono_literals;
+                        //     std::this_thread::sleep_for(200ms);
+
+                        //     if (auto* tasks = SKSE::GetTaskInterface()) {
+                        //         tasks->AddTask([spellFormId]() {
+                        //             auto* pl = RE::PlayerCharacter::GetSingleton();
+                        //             if (pl) {
+                        //                 AdjustSpellLightPosition(pl, spellFormId);
+                        //             }
+                        //         });
+                        //     }
+                        // }).detach();
 
                         // Restore base form after delay
                         std::thread([spellLightBase, spellFormId]() {

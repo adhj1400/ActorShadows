@@ -65,7 +65,8 @@ namespace ActorShadowLimiter {
                     if (!formIdStr.empty()) {
                         light.formId = std::stoul(formIdStr, nullptr, 0);
                     }
-                    light.nodeName = ExtractValue(json, "nodeName", objStart);
+                    light.rootNodeName = ExtractValue(json, "rootNodeName", objStart);
+                    light.lightNodeName = ExtractValue(json, "lightNodeName", objStart);
 
                     std::string offsetX = ExtractValue(json, "offsetX", objStart);
                     if (!offsetX.empty()) light.offsetX = std::stof(offsetX);
@@ -75,6 +76,15 @@ namespace ActorShadowLimiter {
 
                     std::string offsetZ = ExtractValue(json, "offsetZ", objStart);
                     if (!offsetZ.empty()) light.offsetZ = std::stof(offsetZ);
+
+                    std::string rotateX = ExtractValue(json, "rotateX", objStart);
+                    if (!rotateX.empty()) light.rotateX = std::stof(rotateX);
+
+                    std::string rotateY = ExtractValue(json, "rotateY", objStart);
+                    if (!rotateY.empty()) light.rotateY = std::stof(rotateY);
+
+                    std::string rotateZ = ExtractValue(json, "rotateZ", objStart);
+                    if (!rotateZ.empty()) light.rotateZ = std::stof(rotateZ);
 
                     g_config.handHeldLights.push_back(light);
                     objStart = objEnd + 1;
@@ -98,7 +108,26 @@ namespace ActorShadowLimiter {
                     if (!formIdStr.empty()) {
                         spell.formId = std::stoul(formIdStr, nullptr, 0);
                     }
-                    spell.nodeName = ExtractValue(json, "nodeName", objStart);
+                    spell.rootNodeName = ExtractValue(json, "rootNodeName", objStart);
+                    spell.lightNodeName = ExtractValue(json, "lightNodeName", objStart);
+
+                    std::string offsetX = ExtractValue(json, "offsetX", objStart);
+                    if (!offsetX.empty()) spell.offsetX = std::stof(offsetX);
+
+                    std::string offsetY = ExtractValue(json, "offsetY", objStart);
+                    if (!offsetY.empty()) spell.offsetY = std::stof(offsetY);
+
+                    std::string offsetZ = ExtractValue(json, "offsetZ", objStart);
+                    if (!offsetZ.empty()) spell.offsetZ = std::stof(offsetZ);
+
+                    std::string rotateX = ExtractValue(json, "rotateX", objStart);
+                    if (!rotateX.empty()) spell.rotateX = std::stof(rotateX);
+
+                    std::string rotateY = ExtractValue(json, "rotateY", objStart);
+                    if (!rotateY.empty()) spell.rotateY = std::stof(rotateY);
+
+                    std::string rotateZ = ExtractValue(json, "rotateZ", objStart);
+                    if (!rotateZ.empty()) spell.rotateZ = std::stof(rotateZ);
 
                     g_config.spells.push_back(spell);
                     objStart = objEnd + 1;

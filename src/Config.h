@@ -7,15 +7,26 @@ namespace ActorShadowLimiter {
 
     struct HandHeldLightConfig {
         uint32_t formId = 0;
-        std::string nodeName;
+        std::string rootNodeName;
+        std::string lightNodeName;
         float offsetX = 0.0f;
         float offsetY = 0.0f;
         float offsetZ = 0.0f;
+        float rotateX = 0.0f;  // Pitch
+        float rotateY = 0.0f;  // Yaw
+        float rotateZ = 0.0f;  // Roll
     };
 
     struct SpellConfig {
         uint32_t formId = 0;
-        std::string nodeName;
+        std::string rootNodeName;
+        std::string lightNodeName;
+        float offsetX = 0.0f;
+        float offsetY = 0.0f;
+        float offsetZ = 0.0f;
+        float rotateX = 0.0f;  // Pitch
+        float rotateY = 0.0f;  // Yaw
+        float rotateZ = 0.0f;  // Roll
     };
 
     struct Config {

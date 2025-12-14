@@ -2,16 +2,27 @@
   "handHeldLights": [
     {
       "formId": "0x0001D4EC",
-      "nodeName": "AttachLight",
+      "rootNodeName": "TorchFire",
+      "lightNodeName": "AttachLight",
       "offsetX": 1.0,
       "offsetY": 5.0,
-      "offsetZ": -1.0
+      "offsetZ": -1.0,
+      "rotateX": 0.0,
+      "rotateY": 30.0,
+      "rotateZ": 0.0
     }
   ],
   "spells": [
     {
       "formId": "0x00043324",
-      "nodeName": ""
+      "rootNodeName": "Mover",
+      "lightNodeName": "AttachLight",
+      "offsetX": 0.0,
+      "offsetY": 0.0,
+      "offsetZ": 0.0,
+      "rotateX": 0.0,
+      "rotateY": 45.0,
+      "rotateZ": 90.0
     }
   ]
 }

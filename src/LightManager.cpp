@@ -83,11 +83,60 @@ namespace ActorShadowLimiter {
         }).detach();
     }
 
-    void AdjustLightPosition(RE::PlayerCharacter* player) {
-        if (!player) return;
+    namespace {
+        void AdjustLightNodePosition(RE::PlayerCharacter* player, const std::string& rootNodeName,
+                                     const std::string& lightNodeName, float offsetX, float offsetY, float offsetZ,
+                                     float rotateX, float rotateY, float rotateZ, uint32_t formId,
+                                     const char* itemType) {
+            if (!player) return;
 
-        auto* root3D = player->Get3D(false);
-        if (!root3D) return;
+            if (rootNodeName.empty() || lightNodeName.empty()) return;
+
+            // Check camera state to determine which 3D model to use
+            auto* camera = RE::PlayerCamera::GetSingleton();
+            bool isFirstPerson = camera && camera->IsInFirstPerson();
+
+            // Get the appropriate 3D model based on camera state
+            auto* model3D = player->Get3D(isFirstPerson);
+            if (!model3D) {
+                DebugPrint("3D model not found for %s 0x%08X in %s person view", itemType, formId,
+                           isFirstPerson ? "first" : "third");
+                return;
+            }
+
+            // Find the root node
+            RE::NiAVObject* rootNode = model3D->GetObjectByName(rootNodeName.c_str());
+            if (!rootNode) {
+                DebugPrint("Root node '%s' not found for %s 0x%08X in %s person view", rootNodeName.c_str(), itemType,
+                           formId, isFirstPerson ? "first" : "third");
+                return;
+            }
+
+            // Then search for the light node within the root node
+            RE::NiAVObject* lightNode = rootNode->GetObjectByName(lightNodeName.c_str());
+            if (lightNode) {
+                // Move the light (Y axis because node rotation is flipped)
+                lightNode->local.translate.x += offsetX;
+                lightNode->local.translate.y += offsetY;
+                lightNode->local.translate.z += offsetZ;
+
+                // Apply rotation (in radians)
+                constexpr float DEG_TO_RAD = 3.14159265f / 180.0f;
+                lightNode->local.rotate.SetEulerAnglesXYZ(rotateX * DEG_TO_RAD, rotateY * DEG_TO_RAD,
+                                                          rotateZ * DEG_TO_RAD);
+
+                // Update the node
+                RE::NiUpdateData updateData;
+                lightNode->Update(updateData);
+            } else {
+                DebugPrint("Light node '%s' not found within root '%s' for %s 0x%08X", lightNodeName.c_str(),
+                           rootNodeName.c_str(), itemType, formId);
+            }
+        }
+    }
+
+    void AdjustHeldLightPosition(RE::PlayerCharacter* player) {
+        if (!player) return;
 
         // Find the equipped light's config
         auto* lightBase = GetEquippedLight(player);
@@ -103,19 +152,37 @@ namespace ActorShadowLimiter {
             }
         }
 
-        if (!lightConfig) return;
-
-        RE::NiAVObject* lightNode = root3D->GetObjectByName(lightConfig->nodeName.c_str());
-        if (lightNode) {
-            // Move the light (Y axis because node rotation is flipped)
-            lightNode->local.translate.x += lightConfig->offsetX;
-            lightNode->local.translate.y += lightConfig->offsetY;
-            lightNode->local.translate.z += lightConfig->offsetZ;
-
-            // Update the node
-            RE::NiUpdateData updateData;
-            lightNode->Update(updateData);
+        if (!lightConfig) {
+            DebugPrint("No configuration found for hand-held light 0x%08X", lightFormId);
+            return;
         }
+
+        AdjustLightNodePosition(player, lightConfig->rootNodeName, lightConfig->lightNodeName, lightConfig->offsetX,
+                                lightConfig->offsetY, lightConfig->offsetZ, lightConfig->rotateX, lightConfig->rotateY,
+                                lightConfig->rotateZ, lightFormId, "light");
+    }
+
+    void AdjustSpellLightPosition(RE::PlayerCharacter* player, uint32_t spellFormId) {
+        if (!player) return;
+
+        // Find the spell's config
+        const SpellConfig* spellConfig = nullptr;
+
+        for (const auto& config : g_config.spells) {
+            if (config.formId == spellFormId) {
+                spellConfig = &config;
+                break;
+            }
+        }
+
+        if (!spellConfig) {
+            DebugPrint("No configuration found for spell 0x%08X", spellFormId);
+            return;
+        }
+
+        AdjustLightNodePosition(player, spellConfig->rootNodeName, spellConfig->lightNodeName, spellConfig->offsetX,
+                                spellConfig->offsetY, spellConfig->offsetZ, spellConfig->rotateX, spellConfig->rotateY,
+                                spellConfig->rotateZ, spellFormId, "spell");
     }
 
 }

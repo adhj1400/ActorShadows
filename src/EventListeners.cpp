@@ -27,7 +27,7 @@ namespace ActorShadowLimiter {
     }
 
     RE::BSEventNotifyControl EquipListener::ProcessEvent(const RE::TESEquipEvent* event,
-                                                         RE::BSTEventSource<RE::TESEquipEvent>* /*source*/) {
+                                                         RE::BSTEventSource<RE::TESEquipEvent>*) {
         if (!event || !event->actor) {
             return RE::BSEventNotifyControl::kContinue;
         }
@@ -84,13 +84,13 @@ namespace ActorShadowLimiter {
         // Adjust light position after a short delay to ensure the light node is available
         std::thread([]() {
             using namespace std::chrono_literals;
-            std::this_thread::sleep_for(500ms);
+            std::this_thread::sleep_for(200ms);
 
             if (auto* tasks = SKSE::GetTaskInterface()) {
                 tasks->AddTask([]() {
                     auto* pl = RE::PlayerCharacter::GetSingleton();
                     if (pl) {
-                        AdjustLightPosition(pl);
+                        AdjustHeldLightPosition(pl);
                     }
                 });
             }
@@ -115,7 +115,7 @@ namespace ActorShadowLimiter {
     }
 
     RE::BSEventNotifyControl SpellCastListener::ProcessEvent(const RE::TESSpellCastEvent* event,
-                                                             RE::BSTEventSource<RE::TESSpellCastEvent>* /*source*/) {
+                                                             RE::BSTEventSource<RE::TESSpellCastEvent>*) {
         if (!event || !event->object) {
             return RE::BSEventNotifyControl::kContinue;
         }
@@ -159,6 +159,21 @@ namespace ActorShadowLimiter {
 
         // Immediate check
         UpdatePlayerLightShadows();
+
+        // Adjust spell light position after a short delay to ensure the light node is available
+        std::thread([spellFormId]() {
+            using namespace std::chrono_literals;
+            std::this_thread::sleep_for(200ms);
+
+            if (auto* tasks = SKSE::GetTaskInterface()) {
+                tasks->AddTask([spellFormId]() {
+                    auto* pl = RE::PlayerCharacter::GetSingleton();
+                    if (pl) {
+                        AdjustSpellLightPosition(pl, spellFormId);
+                    }
+                });
+            }
+        }).detach();
 
         return RE::BSEventNotifyControl::kContinue;
     }
@@ -270,11 +285,29 @@ namespace ActorShadowLimiter {
                                     tasks->AddTask([]() {
                                         auto* pl = RE::PlayerCharacter::GetSingleton();
                                         if (pl) {
-                                            AdjustLightPosition(pl);
+                                            AdjustHeldLightPosition(pl);
                                         }
                                     });
                                 }
                             }).detach();
+                        }
+                        if (hasConfiguredSpell) {
+                            // TODO: force reapply spell effects?
+                            for (const auto& spellFormId : g_activeSpells) {
+                                std::thread([spellFormId]() {
+                                    using namespace std::chrono_literals;
+                                    std::this_thread::sleep_for(200ms);
+
+                                    if (auto* tasks = SKSE::GetTaskInterface()) {
+                                        tasks->AddTask([spellFormId]() {
+                                            auto* pl = RE::PlayerCharacter::GetSingleton();
+                                            if (pl) {
+                                                AdjustSpellLightPosition(pl, spellFormId);
+                                            }
+                                        });
+                                    }
+                                }).detach();
+                            }
                         }
                     } else {
                         DebugPrint("Cell fully loaded. Player has no configured lights/spells - skipping scan.");
