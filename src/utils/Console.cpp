@@ -16,7 +16,7 @@ namespace ActorShadowLimiter {
         vsnprintf(buffer, sizeof(buffer), format, args);
         va_end(args);
 
-        console->Print("%s", buffer);
+        console->Print("[ActorShadows] %s", buffer);
     }
 
     void DebugPrint(const char* format, ...) {
@@ -31,7 +31,7 @@ namespace ActorShadowLimiter {
         vsnprintf(buffer, sizeof(buffer), format, args);
         va_end(args);
 
-        console->Print("[DEBUG] %s", buffer);
+        console->Print("[ActorShadows DEBUG] %s", buffer);
     }
 
 }

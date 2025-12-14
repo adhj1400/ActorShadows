@@ -128,6 +128,11 @@ namespace ActorShadowLimiter {
                 // Update the node
                 RE::NiUpdateData updateData;
                 lightNode->Update(updateData);
+                DebugPrint(
+                    "Adjusted light node '%s' within root '%s' for %s 0x%08X with values offset(%.2f, %.2f, %.2f) "
+                    "rotation(%.2f, %.2f, %.2f)",
+                    lightNodeName.c_str(), rootNodeName.c_str(), itemType, formId, offsetX, offsetY, offsetZ, rotateX,
+                    rotateY, rotateZ);
             } else {
                 DebugPrint("Light node '%s' not found within root '%s' for %s 0x%08X", lightNodeName.c_str(),
                            rootNodeName.c_str(), itemType, formId);
