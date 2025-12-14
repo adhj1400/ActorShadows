@@ -8,6 +8,7 @@
 #include "SKSE/SKSE.h"
 #include "utils/Console.h"
 #include "utils/Light.h"
+#include "utils/MagicEffect.h"
 
 namespace ActorShadowLimiter {
 
@@ -235,6 +236,45 @@ namespace ActorShadowLimiter {
         AdjustLightNodePosition(player, spellConfig->rootNodeName, spellConfig->lightNodeName, spellConfig->offsetX,
                                 spellConfig->offsetY, spellConfig->offsetZ, spellConfig->rotateX, spellConfig->rotateY,
                                 spellConfig->rotateZ, spellFormId, "spell");
+    }
+
+    // Scan for any configured spells currently active on the player
+    std::vector<uint32_t> GetActiveConfiguredSpells(RE::PlayerCharacter* player) {
+        std::vector<uint32_t> activeSpells;
+
+        for (const auto& spellConfig : g_config.spells) {
+            auto* spell = RE::TESForm::LookupByID<RE::SpellItem>(spellConfig.formId);
+            if (!spell || spell->effects.size() == 0) continue;
+
+            // Check if any of this spell's effects are active
+            for (auto* effect : spell->effects) {
+                if (!effect || !effect->baseEffect) continue;
+
+                if (HasMagicEffect(player, effect->baseEffect->GetFormID())) {
+                    activeSpells.push_back(spellConfig.formId);
+                    break;  // Found this spell active, move to next spell
+                }
+            }
+        }
+
+        return activeSpells;
+    }
+
+    // Check if player has a configured hand-held light equipped
+    std::optional<uint32_t> GetActiveConfiguredLight(RE::PlayerCharacter* player) {
+        auto* lightBase = GetEquippedLight(player);
+        if (!lightBase) return std::nullopt;
+
+        uint32_t lightFormId = lightBase->GetFormID();
+
+        // Check if this light is in our configuration
+        for (const auto& config : g_config.handHeldLights) {
+            if (config.formId == lightFormId) {
+                return lightFormId;
+            }
+        }
+
+        return std::nullopt;
     }
 
 }

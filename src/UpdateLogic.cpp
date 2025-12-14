@@ -14,47 +14,6 @@
 
 namespace ActorShadowLimiter {
 
-    namespace {
-        // Scan for any configured spells currently active on the player
-        std::vector<uint32_t> GetActiveConfiguredSpells(RE::PlayerCharacter* player) {
-            std::vector<uint32_t> activeSpells;
-
-            for (const auto& spellConfig : g_config.spells) {
-                auto* spell = RE::TESForm::LookupByID<RE::SpellItem>(spellConfig.formId);
-                if (!spell || spell->effects.size() == 0) continue;
-
-                // Check if any of this spell's effects are active
-                for (auto* effect : spell->effects) {
-                    if (!effect || !effect->baseEffect) continue;
-
-                    if (HasMagicEffect(player, effect->baseEffect->GetFormID())) {
-                        activeSpells.push_back(spellConfig.formId);
-                        break;  // Found this spell active, move to next spell
-                    }
-                }
-            }
-
-            return activeSpells;
-        }
-
-        // Check if player has a configured hand-held light equipped
-        std::optional<uint32_t> GetActiveConfiguredLight(RE::PlayerCharacter* player) {
-            auto* lightBase = GetEquippedLight(player);
-            if (!lightBase) return std::nullopt;
-
-            uint32_t lightFormId = lightBase->GetFormID();
-
-            // Check if this light is in our configuration
-            for (const auto& config : g_config.handHeldLights) {
-                if (config.formId == lightFormId) {
-                    return lightFormId;
-                }
-            }
-
-            return std::nullopt;
-        }
-    }
-
     void UpdatePlayerLightShadows() {
         auto* player = RE::PlayerCharacter::GetSingleton();
         if (!player) {
@@ -153,8 +112,8 @@ namespace ActorShadowLimiter {
                     // Only update if state changed from last known state
                     bool lastState = g_lastShadowStates[spellFormId];
                     if (wantShadows != lastState) {
-                        DebugPrint("Spell 0x%08X shadow state changed: %s (shadow lights: %d)", spellFormId,
-                                   wantShadows ? "ENABLE" : "DISABLE", shadowLightCount);
+                        DebugPrint("Spell 0x%08X shadow state changed: %s", spellFormId,
+                                   wantShadows ? "ENABLE" : "DISABLE");
 
                         // Get current light type to remember original
                         uint8_t currentLightType = static_cast<uint8_t>(GetLightType(spellLightBase));
@@ -193,7 +152,7 @@ namespace ActorShadowLimiter {
                         // Restore base form after delay
                         std::thread([spellLightBase, spellFormId]() {
                             using namespace std::chrono_literals;
-                            std::this_thread::sleep_for(1s);
+                            std::this_thread::sleep_for(500ms);
 
                             if (auto* tasks = SKSE::GetTaskInterface()) {
                                 tasks->AddTask([spellLightBase, spellFormId]() {

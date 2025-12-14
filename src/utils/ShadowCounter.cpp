@@ -70,7 +70,7 @@ namespace ActorShadowLimiter {
                     // Limit search area
                     if (distSq <= (maxSearchRadius * maxSearchRadius)) {
                         float distance = std::sqrt(distSq);
-                        const char* lightName = lightBaseObj->GetName();
+                        const char* lightName = lightBaseObj->GetFormEditorID();
                         if (!lightName || lightName[0] == '\0') {
                             lightName = "<unnamed>";
                         }
@@ -83,7 +83,6 @@ namespace ActorShadowLimiter {
 
                         // Get light properties that LightPlacer might be modifying
                         int32_t radius = lightBaseObj->data.radius;
-                        float fov = lightBaseObj->data.fov;
 
                         // Check for ExtraRadius override (XRDS)
                         int32_t actualRadius = radius;
@@ -111,16 +110,12 @@ namespace ActorShadowLimiter {
                         bool withinEffectiveShadowDist = distance <= effectiveShadowDistance;
 
                         DebugPrint(
-                            "Shadow light: %s (FormID: 0x%08X, Dist: %.1f, BaseRadius: %d, ActualRadius: %d, "
-                            "ShadowDist: %.1f, EffectiveDist: %.1f, CanReach: %s, WithinEffective: %s, Rendering: %s, "
-                            "FOV: "
-                            "%.1f, Disabled: %s, Deleted: %s, "
-                            "InitDisabled: %s, HasLight: %s)",
-                            lightName, ref.GetFormID(), distance, radius, actualRadius, shadowDistance,
-                            effectiveShadowDistance, canReachPlayer ? "YES" : "NO",
-                            withinEffectiveShadowDist ? "YES" : "NO", isRendering ? "YES" : "NO", fov,
-                            isDisabled ? "YES" : "NO", isDeleted ? "YES" : "NO", isInitiallyDisabled ? "YES" : "NO",
-                            hasLightAttached ? "YES" : "NO");
+                            "Shadow light: %s (0x%08X, Dist: %.1f, RefRadius: %d, "
+                            "ShadowDist: %.1f, EffectiveDist: %.1f, CanReach: %s, WithinEffective: %s, "
+                            "Disabled: %s, HasLight: %s)",
+                            lightName, ref.GetFormID(), distance, actualRadius, shadowDistance, effectiveShadowDistance,
+                            canReachPlayer ? "YES" : "NO", withinEffectiveShadowDist ? "YES" : "NO",
+                            isDisabled ? "YES" : "NO", hasLightAttached ? "YES" : "NO");
 
                         // Only count lights within effective shadow distance and actually emitting
                         // LightPlacer removes lights by not attaching ExtraLight data
