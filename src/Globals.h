@@ -22,8 +22,6 @@ namespace ActorShadowLimiter {
     };
 
     // Global state - generalized for any lights/spells
-    extern std::set<uint32_t> g_activeHandHeldLights;          // Currently equipped hand-held lights (by FormID)
-    extern std::set<uint32_t> g_activeSpells;                  // Currently active spell effects (by FormID)
     extern std::map<uint32_t, uint32_t> g_originalLightTypes;  // FormID -> original light type
     extern std::map<uint32_t, bool> g_lastShadowStates;        // FormID -> last shadow enabled state
     extern bool g_isReequipping;

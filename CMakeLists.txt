@@ -21,7 +21,9 @@ add_commonlibsse_plugin(${PROJECT_NAME} SOURCES
     src/LightManager.cpp
     src/utils/ShadowCounter.cpp
     src/UpdateLogic.cpp
-    src/EventListeners.cpp
+    src/listeners/EquipListener.cpp
+    src/listeners/SpellCastListener.cpp
+    src/listeners/CellListener.cpp
 ) # <--- specifies all source files
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_23) # <--- use C++23 standard
 target_precompile_headers(${PROJECT_NAME} PRIVATE PCH.h) # <--- PCH.h is required!

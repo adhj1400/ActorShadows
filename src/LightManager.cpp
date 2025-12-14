@@ -67,7 +67,7 @@ namespace ActorShadowLimiter {
         // Restore base form after a delay so the reference keeps shadows but base form doesn't
         std::thread([torchBase, lightFormId]() {
             using namespace std::chrono_literals;
-            std::this_thread::sleep_for(2s);  // Longer delay to ensure reference is fully created with shadows
+            std::this_thread::sleep_for(1s);  // Longer delay to ensure reference is fully created with shadows
 
             if (auto* tasks = SKSE::GetTaskInterface()) {
                 tasks->AddTask([torchBase, lightFormId]() {
@@ -111,61 +111,65 @@ namespace ActorShadowLimiter {
 
             if (rootNodeName.empty() || lightNodeName.empty()) return;
 
-            // Check camera state to determine which 3D model to use
-            auto* camera = RE::PlayerCamera::GetSingleton();
-            bool isFirstPerson = camera && camera->IsInFirstPerson();
+            int totalAdjusted = 0;
 
-            // Get the appropriate 3D model based on camera state
-            auto* model3D = player->Get3D(isFirstPerson);
-            if (!model3D) {
-                DebugPrint("3D model not found for %s 0x%08X in %s person view", itemType, formId,
-                           isFirstPerson ? "first" : "third");
-                return;
-            }
+            // Apply to both first person and third person models
+            auto* firstPerson3D = player->Get3D(true);
+            auto* thirdPerson3D = player->Get3D(false);
 
-            // Find all root nodes with matching name (handles multiple nodes with same name, e.g., old + new)
-            std::vector<RE::NiAVObject*> rootNodes;
-            FindAllNodesByName(model3D, rootNodeName, rootNodes);
+            for (int modelIndex = 0; modelIndex < 2; ++modelIndex) {
+                auto* model3D = (modelIndex == 0) ? firstPerson3D : thirdPerson3D;
+                if (!model3D) continue;
 
-            if (rootNodes.empty()) {
-                DebugPrint("Root node '%s' not found for %s 0x%08X in %s person view", rootNodeName.c_str(), itemType,
-                           formId, isFirstPerson ? "first" : "third");
-                return;
-            }
+                const char* viewName = (modelIndex == 0) ? "first" : "third";
 
-            int adjustedCount = 0;
-            // Apply transform to all light nodes within all root nodes
-            for (auto* rootNode : rootNodes) {
-                std::vector<RE::NiAVObject*> lightNodes;
-                FindAllNodesByName(rootNode, lightNodeName, lightNodes);
+                // Find all root nodes with matching name (handles multiple nodes with same name, e.g., old + new)
+                std::vector<RE::NiAVObject*> rootNodes;
+                FindAllNodesByName(model3D, rootNodeName, rootNodes);
 
-                for (auto* lightNode : lightNodes) {
-                    // Move the light (Y axis because node rotation is flipped)
-                    lightNode->local.translate.x += offsetX;
-                    lightNode->local.translate.y += offsetY;
-                    lightNode->local.translate.z += offsetZ;
+                if (rootNodes.empty()) {
+                    DebugPrint("Root node '%s' not found for %s 0x%08X in %s person view", rootNodeName.c_str(),
+                               itemType, formId, viewName);
+                    continue;
+                }
 
-                    // Apply rotation (in radians)
-                    constexpr float DEG_TO_RAD = 3.14159265f / 180.0f;
-                    lightNode->local.rotate.SetEulerAnglesXYZ(rotateX * DEG_TO_RAD, rotateY * DEG_TO_RAD,
-                                                              rotateZ * DEG_TO_RAD);
+                int adjustedCount = 0;
+                // Apply transform to all light nodes within all root nodes
+                for (auto* rootNode : rootNodes) {
+                    std::vector<RE::NiAVObject*> lightNodes;
+                    FindAllNodesByName(rootNode, lightNodeName, lightNodes);
 
-                    // Update the node
-                    RE::NiUpdateData updateData;
-                    lightNode->Update(updateData);
-                    adjustedCount++;
+                    for (auto* lightNode : lightNodes) {
+                        // Move the light (Y axis because node rotation is flipped)
+                        lightNode->local.translate.x += offsetX;
+                        lightNode->local.translate.y += offsetY;
+                        lightNode->local.translate.z += offsetZ;
+
+                        // Apply rotation (in radians)
+                        constexpr float DEG_TO_RAD = 3.14159265f / 180.0f;
+                        lightNode->local.rotate.SetEulerAnglesXYZ(rotateX * DEG_TO_RAD, rotateY * DEG_TO_RAD,
+                                                                  rotateZ * DEG_TO_RAD);
+
+                        // Update the node
+                        RE::NiUpdateData updateData;
+                        lightNode->Update(updateData);
+                        adjustedCount++;
+                    }
+                }
+
+                if (adjustedCount > 0) {
+                    DebugPrint(
+                        "Adjusted %d light node(s) '%s' within %zu root node(s) '%s' for %s 0x%08X in %s "
+                        "person view with values offset(%.2f, %.2f, %.2f) rotation(%.2f, %.2f, %.2f)",
+                        adjustedCount, lightNodeName.c_str(), rootNodes.size(), rootNodeName.c_str(), itemType, formId,
+                        viewName, offsetX, offsetY, offsetZ, rotateX, rotateY, rotateZ);
+                    totalAdjusted += adjustedCount;
                 }
             }
 
-            if (adjustedCount > 0) {
-                DebugPrint(
-                    "Adjusted %d light node(s) '%s' within %zu root node(s) '%s' for %s 0x%08X with values "
-                    "offset(%.2f, %.2f, %.2f) rotation(%.2f, %.2f, %.2f)",
-                    adjustedCount, lightNodeName.c_str(), rootNodes.size(), rootNodeName.c_str(), itemType, formId,
-                    offsetX, offsetY, offsetZ, rotateX, rotateY, rotateZ);
-            } else {
-                DebugPrint("Light node '%s' not found within any root '%s' for %s 0x%08X", lightNodeName.c_str(),
-                           rootNodeName.c_str(), itemType, formId);
+            if (totalAdjusted == 0) {
+                DebugPrint("Light node '%s' not found in any model for %s 0x%08X", lightNodeName.c_str(), itemType,
+                           formId);
             }
         }
     }

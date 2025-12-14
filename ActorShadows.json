@@ -4,11 +4,11 @@
       "formId": "0x0001D4EC",
       "rootNodeName": "TorchFire",
       "lightNodeName": "AttachLight",
-      "offsetX": 1.0,
-      "offsetY": 5.0,
-      "offsetZ": -1.0,
-      "rotateX": 0.0,
-      "rotateY": 30.0,
+      "offsetX": 2.0,
+      "offsetY": 15.0,
+      "offsetZ": -2.0,
+      "rotateX": -20.0,
+      "rotateY": 0.0,
       "rotateZ": 0.0
     }
   ],
@@ -21,7 +21,7 @@
       "offsetY": 0.0,
       "offsetZ": 0.0,
       "rotateX": 0.0,
-      "rotateY": 45.0,
+      "rotateY": -20.0,
       "rotateZ": 90.0
     }
   ]

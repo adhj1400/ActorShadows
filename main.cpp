@@ -1,8 +1,10 @@
 #include "SKSE/SKSE.h"
 #include "src/Config.h"
-#include "src/EventListeners.h"
 #include "src/Globals.h"
 #include "src/UpdateLogic.h"
+#include "src/listeners/CellListener.h"
+#include "src/listeners/EquipListener.h"
+#include "src/listeners/SpellCastListener.h"
 #include "src/utils/Console.h"
 
 using namespace SKSE;
