@@ -84,6 +84,25 @@ namespace ActorShadowLimiter {
     }
 
     namespace {
+        // Recursively find all nodes with the given name, needed in cases that nodes are duplicated
+        // e.g., multiple candlelight spells floating orb while re-casting
+        void FindAllNodesByName(RE::NiAVObject* root, const std::string& name, std::vector<RE::NiAVObject*>& results) {
+            if (!root) return;
+
+            if (root->name == name.c_str()) {
+                results.push_back(root);
+            }
+
+            // If this is a node, search its children
+            if (auto* node = root->AsNode()) {
+                for (auto& child : node->GetChildren()) {
+                    if (child) {
+                        FindAllNodesByName(child.get(), name, results);
+                    }
+                }
+            }
+        }
+
         void AdjustLightNodePosition(RE::PlayerCharacter* player, const std::string& rootNodeName,
                                      const std::string& lightNodeName, float offsetX, float offsetY, float offsetZ,
                                      float rotateX, float rotateY, float rotateZ, uint32_t formId,
@@ -104,37 +123,48 @@ namespace ActorShadowLimiter {
                 return;
             }
 
-            // Find the root node
-            RE::NiAVObject* rootNode = model3D->GetObjectByName(rootNodeName.c_str());
-            if (!rootNode) {
+            // Find all root nodes with matching name (handles multiple nodes with same name, e.g., old + new)
+            std::vector<RE::NiAVObject*> rootNodes;
+            FindAllNodesByName(model3D, rootNodeName, rootNodes);
+
+            if (rootNodes.empty()) {
                 DebugPrint("Root node '%s' not found for %s 0x%08X in %s person view", rootNodeName.c_str(), itemType,
                            formId, isFirstPerson ? "first" : "third");
                 return;
             }
 
-            // Then search for the light node within the root node
-            RE::NiAVObject* lightNode = rootNode->GetObjectByName(lightNodeName.c_str());
-            if (lightNode) {
-                // Move the light (Y axis because node rotation is flipped)
-                lightNode->local.translate.x += offsetX;
-                lightNode->local.translate.y += offsetY;
-                lightNode->local.translate.z += offsetZ;
+            int adjustedCount = 0;
+            // Apply transform to all light nodes within all root nodes
+            for (auto* rootNode : rootNodes) {
+                std::vector<RE::NiAVObject*> lightNodes;
+                FindAllNodesByName(rootNode, lightNodeName, lightNodes);
 
-                // Apply rotation (in radians)
-                constexpr float DEG_TO_RAD = 3.14159265f / 180.0f;
-                lightNode->local.rotate.SetEulerAnglesXYZ(rotateX * DEG_TO_RAD, rotateY * DEG_TO_RAD,
-                                                          rotateZ * DEG_TO_RAD);
+                for (auto* lightNode : lightNodes) {
+                    // Move the light (Y axis because node rotation is flipped)
+                    lightNode->local.translate.x += offsetX;
+                    lightNode->local.translate.y += offsetY;
+                    lightNode->local.translate.z += offsetZ;
 
-                // Update the node
-                RE::NiUpdateData updateData;
-                lightNode->Update(updateData);
+                    // Apply rotation (in radians)
+                    constexpr float DEG_TO_RAD = 3.14159265f / 180.0f;
+                    lightNode->local.rotate.SetEulerAnglesXYZ(rotateX * DEG_TO_RAD, rotateY * DEG_TO_RAD,
+                                                              rotateZ * DEG_TO_RAD);
+
+                    // Update the node
+                    RE::NiUpdateData updateData;
+                    lightNode->Update(updateData);
+                    adjustedCount++;
+                }
+            }
+
+            if (adjustedCount > 0) {
                 DebugPrint(
-                    "Adjusted light node '%s' within root '%s' for %s 0x%08X with values offset(%.2f, %.2f, %.2f) "
-                    "rotation(%.2f, %.2f, %.2f)",
-                    lightNodeName.c_str(), rootNodeName.c_str(), itemType, formId, offsetX, offsetY, offsetZ, rotateX,
-                    rotateY, rotateZ);
+                    "Adjusted %d light node(s) '%s' within %zu root node(s) '%s' for %s 0x%08X with values "
+                    "offset(%.2f, %.2f, %.2f) rotation(%.2f, %.2f, %.2f)",
+                    adjustedCount, lightNodeName.c_str(), rootNodes.size(), rootNodeName.c_str(), itemType, formId,
+                    offsetX, offsetY, offsetZ, rotateX, rotateY, rotateZ);
             } else {
-                DebugPrint("Light node '%s' not found within root '%s' for %s 0x%08X", lightNodeName.c_str(),
+                DebugPrint("Light node '%s' not found within any root '%s' for %s 0x%08X", lightNodeName.c_str(),
                            rootNodeName.c_str(), itemType, formId);
             }
         }
