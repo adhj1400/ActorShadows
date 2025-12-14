@@ -33,7 +33,7 @@ namespace ActorShadowLimiter {
         return nullptr;
     }
 
-    void ForceReequipLight(RE::PlayerCharacter* player) {
+    void ForceReequipLight(RE::PlayerCharacter* player, bool wantShadows) {
         if (g_isReequipping) {
             return;
         }
@@ -51,23 +51,21 @@ namespace ActorShadowLimiter {
             return;
         }
 
-        // Light is always in left hand
+        // Default to left hand slot (VR compatibility - GetObject crashes in VR)
         RE::BGSEquipSlot* slot = nullptr;
-        if (auto* dom = RE::BGSDefaultObjectManager::GetSingleton()) {
-            slot = dom->GetObject<RE::BGSEquipSlot>(RE::DEFAULT_OBJECT::kLeftHandEquip);
-        }
 
         g_isReequipping = true;
 
         uint32_t lightFormId = torchBase->GetFormID();
 
+        // Try unequip/equip with null slot (works in both SE and VR)
         equipManager->UnequipObject(player, torchBase, nullptr, 1, slot, true, false, false, false, nullptr);
         equipManager->EquipObject(player, torchBase, nullptr, 1, slot, true, false, false, false);
 
         // Restore base form after a delay so the reference keeps shadows but base form doesn't
         std::thread([torchBase, lightFormId]() {
             using namespace std::chrono_literals;
-            std::this_thread::sleep_for(1s);  // Longer delay to ensure reference is fully created with shadows
+            std::this_thread::sleep_for(500ms);  // Longer delay to ensure reference is fully created with shadows
 
             if (auto* tasks = SKSE::GetTaskInterface()) {
                 tasks->AddTask([torchBase, lightFormId]() {
@@ -81,6 +79,21 @@ namespace ActorShadowLimiter {
                 g_isReequipping = false;
             }
         }).detach();
+        if (wantShadows) {
+            std::thread([]() {
+                using namespace std::chrono_literals;
+                std::this_thread::sleep_for(200ms);
+
+                if (auto* tasks = SKSE::GetTaskInterface()) {
+                    tasks->AddTask([]() {
+                        auto* pl = RE::PlayerCharacter::GetSingleton();
+                        if (pl) {
+                            AdjustHeldLightPosition(pl);
+                        }
+                    });
+                }
+            }).detach();
+        }
     }
 
     namespace {

@@ -188,9 +188,9 @@ namespace ActorShadowLimiter {
                 g_config.enableInterior = (value == "true" || value == "1" || value == "True" || value == "TRUE");
             } else if (key == "EnableExterior") {
                 g_config.enableExterior = (value == "true" || value == "1" || value == "True" || value == "TRUE");
-            } else if (key == "SearchRadius") {
+            } else if (key == "MaxSearchRadius") {
                 try {
-                    g_config.searchRadius = std::stof(value);
+                    g_config.maxSearchRadius = std::stof(value);
                 } catch (...) {
                     // Keep default
                 }
@@ -198,8 +198,8 @@ namespace ActorShadowLimiter {
         }
 
         file.close();
-        DebugPrint("ActorShadows config loaded: ShadowLimit=%d, SearchRadius=%.1f, Debug=%s", g_config.shadowLightLimit,
-                   g_config.searchRadius, g_config.enableDebug ? "ON" : "OFF");
+        DebugPrint("ActorShadows config loaded: ShadowLimit=%d, MaxSearchRadius=%.1f, Debug=%s",
+                   g_config.shadowLightLimit, g_config.maxSearchRadius, g_config.enableDebug ? "ON" : "OFF");
     }
 
     void BuildEffectToSpellMapping() {

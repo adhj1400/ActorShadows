@@ -39,21 +39,6 @@ namespace ActorShadowLimiter {
 
             if (auto* tasks = SKSE::GetTaskInterface()) {
                 tasks->AddTask([player]() {
-                    // Check for configured hand-held lights
-                    bool hasConfiguredLight = false;
-                    auto* lightBase = GetEquippedLight(player);
-                    if (lightBase) {
-                        uint32_t lightFormId = lightBase->GetFormID();
-                        for (const auto& config : g_config.handHeldLights) {
-                            if (config.formId == lightFormId) {
-                                hasConfiguredLight = true;
-                                g_lastShadowStates[lightFormId] = false;
-                                DebugPrint("CellListener: Configured light detected (FormID: 0x%08X)", lightFormId);
-                                break;
-                            }
-                        }
-                    }
-
                     DebugPrint("Cell fully loaded. Rechecking shadow state.");
 
                     // Start polling thread
@@ -61,25 +46,6 @@ namespace ActorShadowLimiter {
 
                     // Immediate check (will scan for active spells automatically)
                     UpdatePlayerLightShadows();
-
-                    // Force re-equip and position adjustment for hand-held lights if present
-                    if (hasConfiguredLight) {
-                        ForceReequipLight(player);
-
-                        std::thread([]() {
-                            using namespace std::chrono_literals;
-                            std::this_thread::sleep_for(200ms);
-
-                            if (auto* tasks = SKSE::GetTaskInterface()) {
-                                tasks->AddTask([]() {
-                                    auto* pl = RE::PlayerCharacter::GetSingleton();
-                                    if (pl) {
-                                        AdjustHeldLightPosition(pl);
-                                    }
-                                });
-                            }
-                        }).detach();
-                    }
                 });
             }
         }).detach();

@@ -12,9 +12,9 @@ namespace ActorShadowLimiter {
         float offsetX = 0.0f;
         float offsetY = 0.0f;
         float offsetZ = 0.0f;
-        float rotateX = 0.0f;  // Pitch
-        float rotateY = 0.0f;  // Yaw
-        float rotateZ = 0.0f;  // Roll
+        float rotateX = 0.0f;
+        float rotateY = 0.0f;
+        float rotateZ = 0.0f;
     };
 
     struct SpellConfig {
@@ -24,9 +24,9 @@ namespace ActorShadowLimiter {
         float offsetX = 0.0f;
         float offsetY = 0.0f;
         float offsetZ = 0.0f;
-        float rotateX = 0.0f;  // Pitch
-        float rotateY = 0.0f;  // Yaw
-        float rotateZ = 0.0f;  // Roll
+        float rotateX = 0.0f;
+        float rotateY = 0.0f;
+        float rotateZ = 0.0f;
     };
 
     struct Config {
@@ -35,7 +35,7 @@ namespace ActorShadowLimiter {
         int pollIntervalSeconds = 5;
         bool enableInterior = true;
         bool enableExterior = true;
-        float searchRadius = 6000.0f;
+        float maxSearchRadius = 6000.0f;
 
         std::vector<HandHeldLightConfig> handHeldLights;
         std::vector<SpellConfig> spells;

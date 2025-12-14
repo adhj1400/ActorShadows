@@ -85,6 +85,15 @@ namespace ActorShadowLimiter {
         auto activeSpells = GetActiveConfiguredSpells(player);
         auto activeLight = GetActiveConfiguredLight(player);
 
+        // If no configured items are active, stop the polling thread
+        if (!activeLight.has_value() && activeSpells.empty()) {
+            if (g_pollThreadRunning) {
+                DebugPrint("No configured lights or spells active - stopping shadow polling thread");
+                g_pollThreadRunning = false;
+            }
+            return;
+        }
+
         // ============ Hand-Held Lights Logic ============
         if (activeLight.has_value() && activeSpells.empty()) {
             uint32_t lightFormId = activeLight.value();
@@ -111,24 +120,7 @@ namespace ActorShadowLimiter {
                 SetLightTypeNative(lightBase, newType);
 
                 // Force re-equip to update the reference
-                ForceReequipLight(player);
-
-                // Adjust light position after re-equip (only when enabling shadows)
-                if (wantShadows) {
-                    std::thread([]() {
-                        using namespace std::chrono_literals;
-                        std::this_thread::sleep_for(200ms);
-
-                        if (auto* tasks = SKSE::GetTaskInterface()) {
-                            tasks->AddTask([]() {
-                                auto* pl = RE::PlayerCharacter::GetSingleton();
-                                if (pl) {
-                                    AdjustHeldLightPosition(pl);
-                                }
-                            });
-                        }
-                    }).detach();
-                }
+                ForceReequipLight(player, wantShadows);
 
                 g_lastShadowStates[lightFormId] = wantShadows;
             }
@@ -231,13 +223,19 @@ namespace ActorShadowLimiter {
         std::thread([]() {
             using namespace std::chrono_literals;
 
-            while (true) {
+            while (g_pollThreadRunning) {
                 std::this_thread::sleep_for(std::chrono::seconds(g_config.pollIntervalSeconds));
+
+                // Check again after sleep in case flag was set during sleep
+                if (!g_pollThreadRunning) {
+                    break;
+                }
 
                 if (auto* tasks = SKSE::GetTaskInterface()) {
                     tasks->AddTask([]() { UpdatePlayerLightShadows(); });
                 }
             }
+            DebugPrint("Shadow poll thread stopped");
         }).detach();
         DebugPrint("Shadow poll thread started (%ds interval)", g_config.pollIntervalSeconds);
     }

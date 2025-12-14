@@ -20,7 +20,20 @@ namespace ActorShadowLimiter {
         RE::NiPoint3 playerPos = player->GetPosition();
 
         int shadowLightCount = 0;
-        float searchRadius = g_config.searchRadius;
+        float maxSearchRadius = g_config.maxSearchRadius;
+
+        // Get shadow distance from game settings
+        float shadowDistance = 3000.0f;  // Default fallback
+        bool isInterior = cell->IsInteriorCell();
+
+        auto* gameSettingCollection = RE::GameSettingCollection::GetSingleton();
+        if (gameSettingCollection) {
+            auto* setting =
+                gameSettingCollection->GetSetting(isInterior ? "fInteriorShadowDistance" : "fShadowDistance");
+            if (setting) {
+                shadowDistance = setting->GetFloat();
+            }
+        }
 
         // Lambda to count shadow lights in a cell
         auto countInCell = [&](RE::TESObjectCELL* targetCell) {
@@ -47,15 +60,74 @@ namespace ActorShadowLimiter {
                                      flags.any(RE::TES_LIGHT_FLAGS::kSpotShadow);
 
                 if (isShadowLight) {
-                    // Check distance
+                    // Check distance from player
                     RE::NiPoint3 lightPos = ref.GetPosition();
                     float dx = lightPos.x - playerPos.x;
                     float dy = lightPos.y - playerPos.y;
                     float dz = lightPos.z - playerPos.z;
                     float distSq = dx * dx + dy * dy + dz * dz;
 
-                    if (distSq <= (searchRadius * searchRadius)) {
-                        ++shadowLightCount;
+                    // Limit search area
+                    if (distSq <= (maxSearchRadius * maxSearchRadius)) {
+                        float distance = std::sqrt(distSq);
+                        const char* lightName = lightBaseObj->GetName();
+                        if (!lightName || lightName[0] == '\0') {
+                            lightName = "<unnamed>";
+                        }
+
+                        bool isDisabled = ref.IsDisabled();
+                        bool isDeleted = ref.IsDeleted();
+                        bool isInitiallyDisabled = ref.GetFormFlags() & 0x800;  // Initially disabled flag
+                        bool hasLightAttached =
+                            ref.extraList.HasType(RE::ExtraDataType::kLight);  // Required by LightPlacer
+
+                        // Get light properties that LightPlacer might be modifying
+                        int32_t radius = lightBaseObj->data.radius;
+                        float fov = lightBaseObj->data.fov;
+
+                        // Check for ExtraRadius override (XRDS)
+                        int32_t actualRadius = radius;
+                        auto* extraRadius = ref.extraList.GetByType<RE::ExtraRadius>();
+                        if (extraRadius) {
+                            actualRadius = static_cast<int32_t>(extraRadius->radius);
+                        }
+
+                        // Check if the light is actually rendering by examining the NiLight node
+                        bool isRendering = false;
+                        if (hasLightAttached) {
+                            auto* extraLight = ref.extraList.GetByType<RE::ExtraLight>();
+                            if (extraLight && extraLight->lightData && extraLight->lightData->light) {
+                                auto* niLight = extraLight->lightData->light.get();
+                                // A light is rendering if the node exists and is not culled
+                                isRendering = niLight != nullptr;
+                            }
+                        }
+
+                        // Check if light can reach the player (within light's radius)
+                        bool canReachPlayer = distance <= actualRadius;
+
+                        // Effective shadow distance: light radius + game's shadow distance setting
+                        float effectiveShadowDistance = actualRadius + shadowDistance;
+                        bool withinEffectiveShadowDist = distance <= effectiveShadowDistance;
+
+                        DebugPrint(
+                            "Shadow light: %s (FormID: 0x%08X, Dist: %.1f, BaseRadius: %d, ActualRadius: %d, "
+                            "ShadowDist: %.1f, EffectiveDist: %.1f, CanReach: %s, WithinEffective: %s, Rendering: %s, "
+                            "FOV: "
+                            "%.1f, Disabled: %s, Deleted: %s, "
+                            "InitDisabled: %s, HasLight: %s)",
+                            lightName, ref.GetFormID(), distance, radius, actualRadius, shadowDistance,
+                            effectiveShadowDistance, canReachPlayer ? "YES" : "NO",
+                            withinEffectiveShadowDist ? "YES" : "NO", isRendering ? "YES" : "NO", fov,
+                            isDisabled ? "YES" : "NO", isDeleted ? "YES" : "NO", isInitiallyDisabled ? "YES" : "NO",
+                            hasLightAttached ? "YES" : "NO");
+
+                        // Only count lights within effective shadow distance and actually emitting
+                        // LightPlacer removes lights by not attaching ExtraLight data
+                        if (!isDisabled && !isDeleted && !isInitiallyDisabled && hasLightAttached && actualRadius > 0 &&
+                            isRendering && withinEffectiveShadowDist) {
+                            ++shadowLightCount;
+                        }
                     }
                 }
 
