@@ -17,7 +17,7 @@ namespace ActorShadowLimiter {
         auto* eventSource = RE::ScriptEventSourceHolder::GetSingleton();
         if (eventSource) {
             eventSource->AddEventSink<RE::TESCellFullyLoadedEvent>(GetSingleton());
-            DebugPrint("CellListener installed.");
+            DebugPrint("INIT", "CellListener installed.");
         }
     }
 
@@ -32,23 +32,24 @@ namespace ActorShadowLimiter {
             return RE::BSEventNotifyControl::kContinue;
         }
 
-        // Delay check to allow equipment to fully load
-        std::thread([player]() {
-            using namespace std::chrono_literals;
-            std::this_thread::sleep_for(200ms);
+        // Check if player has configured items active
+        auto activeLight = GetActiveConfiguredLight(player);
+        auto activeSpells = GetActiveConfiguredSpells(player);
 
-            if (auto* tasks = SKSE::GetTaskInterface()) {
-                tasks->AddTask([player]() {
-                    DebugPrint("Cell fully loaded. Rechecking shadow state.");
+        if (!activeLight.has_value() && activeSpells.empty()) {
+            // No configured items active, skip processing
+            return RE::BSEventNotifyControl::kContinue;
+        }
 
-                    // Start polling thread
-                    StartShadowPollThread();
+        DebugPrint("UPDATE", "Cell fully loaded. Rechecking shadow state.");
 
-                    // Immediate check (will scan for active spells automatically)
-                    UpdatePlayerLightShadows();
-                });
-            }
-        }).detach();
+        // Reset equipped lights and active spells to no-shadow variant, to avoid
+        // crashes if new cells has too many lights
+        ResetEquippedLightToNoShadow(player);
+        ResetActiveSpellsToNoShadow(player);
+
+        // Start polling thread
+        StartShadowPollThread();
 
         return RE::BSEventNotifyControl::kContinue;
     }

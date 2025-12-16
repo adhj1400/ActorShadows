@@ -5,6 +5,7 @@
 #include "../LightManager.h"
 #include "../UpdateLogic.h"
 #include "../utils/Console.h"
+#include "../utils/Light.h"
 
 namespace ActorShadowLimiter {
 
@@ -17,7 +18,7 @@ namespace ActorShadowLimiter {
         auto* eventSource = RE::ScriptEventSourceHolder::GetSingleton();
         if (eventSource) {
             eventSource->AddEventSink<RE::TESEquipEvent>(GetSingleton());
-            DebugPrint("EquipListener installed.");
+            DebugPrint("INIT", "EquipListener installed.");
         }
     }
 
@@ -61,9 +62,25 @@ namespace ActorShadowLimiter {
             return RE::BSEventNotifyControl::kContinue;
         }
 
-        DebugPrint("Configured hand-held light 0x%08X equipped. Starting tracking.", lightFormId);
+        // Check if the light already has shadows - if so, let the poller handle it
+        uint32_t currentType = GetLightType(lightBase);
+        if (currentType == 1 || currentType == 3) {  // OmniShadow or SpotShadow
+            // Restore base form to original type
+            if (g_originalLightTypes.find(lightFormId) != g_originalLightTypes.end()) {
+                SetLightTypeNative(lightBase, g_originalLightTypes[lightFormId]);
+            }
 
-        // Reset state for this light
+            auto* pl = RE::PlayerCharacter::GetSingleton();
+            if (pl) {
+                AdjustHeldLightPosition(pl);
+            }
+
+            return RE::BSEventNotifyControl::kContinue;
+        }
+
+        DebugPrint("EQUIP", "Configured hand-held light 0x%08X equipped. Starting tracking.", lightFormId);
+
+        // Reset state for this light (it's a no-shadow variant)
         g_lastShadowStates[lightFormId] = false;
 
         // Start polling if not already running

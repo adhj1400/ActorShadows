@@ -34,6 +34,99 @@ namespace ActorShadowLimiter {
         return nullptr;
     }
 
+    void ResetEquippedLightToNoShadow(RE::PlayerCharacter* player) {
+        if (!player) {
+            return;
+        }
+
+        auto* lightBase = GetEquippedLight(player);
+        if (!lightBase) {
+            return;
+        }
+
+        uint32_t lightFormId = lightBase->GetFormID();
+
+        // Check if this light is configured
+        bool isConfigured = false;
+        for (const auto& config : g_config.handHeldLights) {
+            if (config.formId == lightFormId) {
+                isConfigured = true;
+                break;
+            }
+        }
+
+        if (!isConfigured) {
+            return;
+        }
+
+        // Get current light type and store as original if not already stored
+        uint8_t currentLightType = static_cast<uint8_t>(GetLightType(lightBase));
+        if (g_originalLightTypes.find(lightFormId) == g_originalLightTypes.end()) {
+            g_originalLightTypes[lightFormId] = currentLightType;
+        }
+
+        // Set to no-shadow variant
+        uint8_t noShadowType = static_cast<uint8_t>(LightType::OmniNS);
+        if (currentLightType != noShadowType) {
+            SetLightTypeNative(lightBase, noShadowType);
+        }
+
+        // Update last known state
+        g_lastShadowStates[lightFormId] = false;
+    }
+
+    void ResetActiveSpellsToNoShadow(RE::PlayerCharacter* player) {
+        if (!player) {
+            return;
+        }
+
+        // Get active configured spells
+        auto activeSpells = GetActiveConfiguredSpells(player);
+        if (activeSpells.empty()) {
+            return;
+        }
+
+        // For each active configured spell, reset its light to no-shadow
+        for (uint32_t spellFormId : activeSpells) {
+            // Get the spell form
+            auto* spellForm = RE::TESForm::LookupByID(spellFormId);
+            if (!spellForm) {
+                continue;
+            }
+
+            auto* spell = spellForm->As<RE::SpellItem>();
+            if (!spell || spell->effects.empty()) {
+                continue;
+            }
+
+            // Get light from first effect
+            auto* effect = spell->effects[0];
+            if (!effect || !effect->baseEffect) {
+                continue;
+            }
+
+            auto* lightBase = effect->baseEffect->data.light;
+            if (!lightBase) {
+                continue;
+            }
+
+            // Store original type if not already stored
+            uint8_t currentLightType = static_cast<uint8_t>(GetLightType(lightBase));
+            if (g_originalLightTypes.find(spellFormId) == g_originalLightTypes.end()) {
+                g_originalLightTypes[spellFormId] = currentLightType;
+            }
+
+            // Set to no-shadow variant
+            uint8_t noShadowType = static_cast<uint8_t>(LightType::OmniNS);
+            if (currentLightType != noShadowType) {
+                SetLightTypeNative(lightBase, noShadowType);
+            }
+
+            // Update last known state
+            g_lastShadowStates[spellFormId] = false;
+        }
+    }
+
     void ForceReequipLight(RE::PlayerCharacter* player, bool wantShadows) {
         if (g_isReequipping) {
             return;
@@ -72,7 +165,8 @@ namespace ActorShadowLimiter {
                 tasks->AddTask([torchBase, lightFormId]() {
                     if (g_originalLightTypes.find(lightFormId) != g_originalLightTypes.end()) {
                         SetLightTypeNative(torchBase, g_originalLightTypes[lightFormId]);
-                        DebugPrint("Restored base form to original type: %u", g_originalLightTypes[lightFormId]);
+                        DebugPrint("EQUIP", "Restored base form to original type: %u",
+                                   g_originalLightTypes[lightFormId]);
                     }
                     g_isReequipping = false;
                 });
@@ -80,21 +174,6 @@ namespace ActorShadowLimiter {
                 g_isReequipping = false;
             }
         }).detach();
-        if (wantShadows) {
-            std::thread([]() {
-                using namespace std::chrono_literals;
-                std::this_thread::sleep_for(200ms);
-
-                if (auto* tasks = SKSE::GetTaskInterface()) {
-                    tasks->AddTask([]() {
-                        auto* pl = RE::PlayerCharacter::GetSingleton();
-                        if (pl) {
-                            AdjustHeldLightPosition(pl);
-                        }
-                    });
-                }
-            }).detach();
-        }
     }
 
     namespace {
@@ -142,8 +221,8 @@ namespace ActorShadowLimiter {
                 FindAllNodesByName(model3D, rootNodeName, rootNodes);
 
                 if (rootNodes.empty()) {
-                    DebugPrint("Root node '%s' not found for %s 0x%08X in %s person view", rootNodeName.c_str(),
-                               itemType, formId, viewName);
+                    DebugPrint("TRANSFORM", "Root node '%s' not found for %s 0x%08X in %s person view",
+                               rootNodeName.c_str(), itemType, formId, viewName);
                     continue;
                 }
 
@@ -164,7 +243,7 @@ namespace ActorShadowLimiter {
                         lightNode->local.rotate.SetEulerAnglesXYZ(rotateX * DEG_TO_RAD, rotateY * DEG_TO_RAD,
                                                                   rotateZ * DEG_TO_RAD);
 
-                        // Update the node
+                                                // Update the node
                         RE::NiUpdateData updateData;
                         lightNode->Update(updateData);
                         adjustedCount++;
@@ -172,18 +251,18 @@ namespace ActorShadowLimiter {
                 }
 
                 if (adjustedCount > 0) {
-                    DebugPrint(
-                        "Adjusted %d light node(s) '%s' within %zu root node(s) '%s' for %s 0x%08X in %s "
-                        "person view with values offset(%.2f, %.2f, %.2f) rotation(%.2f, %.2f, %.2f)",
-                        adjustedCount, lightNodeName.c_str(), rootNodes.size(), rootNodeName.c_str(), itemType, formId,
-                        viewName, offsetX, offsetY, offsetZ, rotateX, rotateY, rotateZ);
+                    DebugPrint("TRANSFORM",
+                               "Adjusted %d light node(s) '%s' within %zu root node(s) '%s' for %s 0x%08X in %s "
+                               "person view with values offset(%.2f, %.2f, %.2f) rotation(%.2f, %.2f, %.2f)",
+                               adjustedCount, lightNodeName.c_str(), rootNodes.size(), rootNodeName.c_str(), itemType,
+                               formId, viewName, offsetX, offsetY, offsetZ, rotateX, rotateY, rotateZ);
                     totalAdjusted += adjustedCount;
                 }
             }
 
             if (totalAdjusted == 0) {
-                DebugPrint("Light node '%s' not found in any model for %s 0x%08X", lightNodeName.c_str(), itemType,
-                           formId);
+                DebugPrint("TRANSFORM", "Light node '%s' not found in any model for %s 0x%08X", lightNodeName.c_str(),
+                           itemType, formId);
             }
         }
     }
@@ -206,7 +285,7 @@ namespace ActorShadowLimiter {
         }
 
         if (!lightConfig) {
-            DebugPrint("No configuration found for hand-held light 0x%08X", lightFormId);
+            DebugPrint("TRANSFORM", "No configuration found for hand-held light 0x%08X", lightFormId);
             return;
         }
 
@@ -229,7 +308,7 @@ namespace ActorShadowLimiter {
         }
 
         if (!spellConfig) {
-            DebugPrint("No configuration found for spell 0x%08X", spellFormId);
+            DebugPrint("TRANSFORM", "No configuration found for spell 0x%08X", spellFormId);
             return;
         }
 

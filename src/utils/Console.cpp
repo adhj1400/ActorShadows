@@ -19,7 +19,7 @@ namespace ActorShadowLimiter {
         console->Print("[ActorShadows] %s", buffer);
     }
 
-    void DebugPrint(const char* format, ...) {
+    void DebugPrint(const std::string& action, const char* format, ...) {
         if (!g_config.enableDebug) return;
 
         auto* console = RE::ConsoleLog::GetSingleton();
@@ -31,7 +31,7 @@ namespace ActorShadowLimiter {
         vsnprintf(buffer, sizeof(buffer), format, args);
         va_end(args);
 
-        console->Print("[ActorShadows DEBUG] %s", buffer);
+        console->Print("[ActorShadows %s] %s", action.c_str(), buffer);
     }
 
 }

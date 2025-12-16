@@ -135,8 +135,8 @@ namespace ActorShadowLimiter {
             }
         }
 
-        DebugPrint("Loaded %zu hand-held lights and %zu spells from ActorShadows.json", g_config.handHeldLights.size(),
-                   g_config.spells.size());
+        DebugPrint("CONFIG", "Loaded %zu hand-held lights and %zu spells from ActorShadows.json",
+                   g_config.handHeldLights.size(), g_config.spells.size());
     }
 
     void LoadConfig() {
@@ -198,7 +198,7 @@ namespace ActorShadowLimiter {
         }
 
         file.close();
-        DebugPrint("ActorShadows config loaded: ShadowLimit=%d, MaxSearchRadius=%.1f, Debug=%s",
+        DebugPrint("CONFIG", "ActorShadows config loaded: ShadowLimit=%d, MaxSearchRadius=%.1f, Debug=%s",
                    g_config.shadowLightLimit, g_config.maxSearchRadius, g_config.enableDebug ? "ON" : "OFF");
     }
 
@@ -210,7 +210,7 @@ namespace ActorShadowLimiter {
 
             auto* spell = RE::TESForm::LookupByID<RE::SpellItem>(spellConfig.formId);
             if (!spell || spell->effects.size() == 0) {
-                DebugPrint("Warning: Spell FormID 0x%08X not found or has no effects", spellConfig.formId);
+                DebugPrint("CONFIG", "Warning: Spell FormID 0x%08X not found or has no effects", spellConfig.formId);
                 continue;
             }
 
@@ -222,13 +222,13 @@ namespace ActorShadowLimiter {
 
                 auto* asLight = assocForm->As<RE::TESObjectLIGH>();
                 if (asLight) {
-                    DebugPrint("Mapped effect 0x%08X -> spell 0x%08X", effect->baseEffect->GetFormID(),
+                    DebugPrint("CONFIG", "Mapped effect 0x%08X -> spell 0x%08X", effect->baseEffect->GetFormID(),
                                spellConfig.formId);
                 }
             }
         }
 
-        DebugPrint("Built effect-to-spell mapping for %zu configured spells", g_config.spells.size());
+        DebugPrint("CONFIG", "Built effect-to-spell mapping for %zu configured spells", g_config.spells.size());
     }
 
 }

@@ -23,8 +23,6 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
             EquipListener::Install();
             SpellCastListener::Install();
             CellListener::Install();
-
-            StartShadowPollThread();
         }
     });
 

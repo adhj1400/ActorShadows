@@ -35,7 +35,7 @@ namespace ActorShadowLimiter {
             }
         }
 
-        // Lambda to count shadow lights in a cell
+        // Count shadow lights in a cell
         auto countInCell = [&](RE::TESObjectCELL* targetCell) {
             if (!targetCell) {
                 return;
@@ -70,11 +70,6 @@ namespace ActorShadowLimiter {
                     // Limit search area
                     if (distSq <= (maxSearchRadius * maxSearchRadius)) {
                         float distance = std::sqrt(distSq);
-                        const char* lightName = lightBaseObj->GetFormEditorID();
-                        if (!lightName || lightName[0] == '\0') {
-                            lightName = "<unnamed>";
-                        }
-
                         bool isDisabled = ref.IsDisabled();
                         bool isDeleted = ref.IsDeleted();
                         bool isInitiallyDisabled = ref.GetFormFlags() & 0x800;  // Initially disabled flag
@@ -109,13 +104,12 @@ namespace ActorShadowLimiter {
                         float effectiveShadowDistance = actualRadius + shadowDistance;
                         bool withinEffectiveShadowDist = distance <= effectiveShadowDistance;
 
-                        DebugPrint(
-                            "Shadow light: %s (0x%08X, Dist: %.1f, RefRadius: %d, "
-                            "ShadowDist: %.1f, EffectiveDist: %.1f, CanReach: %s, WithinEffective: %s, "
-                            "Disabled: %s, HasLight: %s)",
-                            lightName, ref.GetFormID(), distance, actualRadius, shadowDistance, effectiveShadowDistance,
-                            canReachPlayer ? "YES" : "NO", withinEffectiveShadowDist ? "YES" : "NO",
-                            isDisabled ? "YES" : "NO", hasLightAttached ? "YES" : "NO");
+                        DebugPrint("SCAN",
+                                   "Base: 0x%08X, Ref: 0x%08X, Radius: %d, "
+                                   "ShadowDist: %.1f, EffectiveDist: %.1f, "
+                                   "Disabled: %s, HasLight: %s",
+                                   lightBaseObj->GetFormID(), ref.GetFormID(), actualRadius, shadowDistance,
+                                   effectiveShadowDistance, isDisabled ? "YES" : "NO", hasLightAttached ? "YES" : "NO");
 
                         // Only count lights within effective shadow distance and actually emitting
                         // LightPlacer removes lights by not attaching ExtraLight data
@@ -132,16 +126,15 @@ namespace ActorShadowLimiter {
 
         // Count lights in the current cell
         countInCell(cell);
+        auto isExterior = cell->IsExteriorCell();
 
         // If in exterior, also check neighboring cells
-        if (cell->IsExteriorCell()) {
-            DebugPrint("Exterior cell detected, checking grid cells");
+        if (isExterior) {
             auto* tes = RE::TES::GetSingleton();
             if (tes && tes->interiorCell == nullptr) {
                 // Get the grid of loaded cells around the player
                 auto* gridCells = tes->gridCells;
                 if (gridCells) {
-                    DebugPrint("Grid cells available, length: %u", gridCells->length);
                     for (uint32_t x = 0; x < gridCells->length; ++x) {
                         for (uint32_t y = 0; y < gridCells->length; ++y) {
                             auto* gridCell = gridCells->GetCell(x, y);
@@ -154,7 +147,8 @@ namespace ActorShadowLimiter {
             }
         }
 
-        DebugPrint("Total shadow lights found: %d", shadowLightCount);
+        DebugPrint("SCAN", "There are %d lights too close to the player, Type: %s", shadowLightCount,
+                   isExterior ? "EXTERIOR" : "INTERIOR");
         return shadowLightCount;
     }
 

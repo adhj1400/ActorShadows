@@ -47,7 +47,7 @@ namespace ActorShadowLimiter {
         // If no configured items are active, stop the polling thread
         if (!activeLight.has_value() && activeSpells.empty()) {
             if (g_pollThreadRunning) {
-                DebugPrint("No configured lights or spells active - stopping shadow polling thread");
+                DebugPrint("UPDATE", "No configured lights or spells active - stopping shadow polling thread");
                 g_pollThreadRunning = false;
             }
             return;
@@ -62,7 +62,7 @@ namespace ActorShadowLimiter {
             // Only update if state changed from last known state
             bool lastState = g_lastShadowStates[lightFormId];
             if (wantShadows != lastState) {
-                DebugPrint("Hand-held light 0x%08X shadow state changed: %s (shadow lights: %d)", lightFormId,
+                DebugPrint("UPDATE", "Hand-held light 0x%08X shadow state changed: %s (shadow lights: %d)", lightFormId,
                            wantShadows ? "ENABLE" : "DISABLE", shadowLightCount);
 
                 // Get current light type to remember original
@@ -112,7 +112,7 @@ namespace ActorShadowLimiter {
                     // Only update if state changed from last known state
                     bool lastState = g_lastShadowStates[spellFormId];
                     if (wantShadows != lastState) {
-                        DebugPrint("Spell 0x%08X shadow state changed: %s", spellFormId,
+                        DebugPrint("UPDATE", "Spell 0x%08X shadow state changed: %s", spellFormId,
                                    wantShadows ? "ENABLE" : "DISABLE");
 
                         // Get current light type to remember original
@@ -158,8 +158,8 @@ namespace ActorShadowLimiter {
                                 tasks->AddTask([spellLightBase, spellFormId]() {
                                     uint32_t originalType = g_originalLightTypes[spellFormId];
                                     SetLightTypeNative(spellLightBase, originalType);
-                                    DebugPrint("Restored spell 0x%08X base form to original type: %u", spellFormId,
-                                               originalType);
+                                    DebugPrint("UPDATE", "Restored spell 0x%08X base form to original type: %u",
+                                               spellFormId, originalType);
                                 });
                             }
                         }).detach();
@@ -194,9 +194,9 @@ namespace ActorShadowLimiter {
                     tasks->AddTask([]() { UpdatePlayerLightShadows(); });
                 }
             }
-            DebugPrint("Shadow poll thread stopped");
+            DebugPrint("UPDATE", "Shadow poll thread stopped");
         }).detach();
-        DebugPrint("Shadow poll thread started (%ds interval)", g_config.pollIntervalSeconds);
+        DebugPrint("UPDATE", "Shadow poll thread started (%ds interval)", g_config.pollIntervalSeconds);
     }
 
 }

@@ -16,7 +16,7 @@ namespace ActorShadowLimiter {
         auto* eventSource = RE::ScriptEventSourceHolder::GetSingleton();
         if (eventSource) {
             eventSource->AddEventSink<RE::TESSpellCastEvent>(GetSingleton());
-            DebugPrint("SpellCastListener installed.");
+            DebugPrint("INIT", "SpellCastListener installed.");
         }
     }
 
@@ -51,7 +51,7 @@ namespace ActorShadowLimiter {
             return RE::BSEventNotifyControl::kContinue;
         }
 
-        DebugPrint("Configured spell 0x%08X cast detected. Starting tracking.", spellFormId);
+        DebugPrint("SPELLCAST", "Configured spell 0x%08X cast detected. Starting tracking.", spellFormId);
 
         // Reset state for this spell
         g_lastShadowStates[spellFormId] = false;
