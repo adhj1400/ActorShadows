@@ -1,0 +1,30 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -117,9 +117,8 @@
+     )
+ endif()
+ 
+-set(OPENVR_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/extern/openvr/headers)
+-set(OPENVR_LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/extern/openvr/lib/win64)
++find_package(openvr CONFIG REQUIRED)
+ target_include_directories(
+     "${PROJECT_NAME}"
+     PUBLIC
+     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+     "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
+-    "$<BUILD_INTERFACE:${OPENVR_INCLUDE_DIR}>"
+ )
+ 
+ target_include_directories(
+@@ -152,7 +151,7 @@
+     DXGI.lib
+     Ole32.lib
+     Version.lib
+-    "$<$<BOOL:${ENABLE_SKYRIM_VR}>:${OPENVR_LIB_DIR}/openvr_api.lib>"
++    "$<$<BOOL:${ENABLE_SKYRIM_VR}>:openvr_api>"
+ )
+ 
+ target_precompile_headers(
+
+

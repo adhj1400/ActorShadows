@@ -41,8 +41,11 @@ namespace ActorShadowLimiter {
                 return;
             }
 
-            targetCell->ForEachReference([&](RE::TESObjectREFR& ref) {
-                auto* lightBase = ref.GetBaseObject();
+            targetCell->ForEachReference([&](RE::TESObjectREFR* ref) {
+                if (!ref) {
+                    return RE::BSContainer::ForEachResult::kContinue;
+                }
+                auto* lightBase = ref->GetBaseObject();
                 if (!lightBase || lightBase->GetFormType() != RE::FormType::Light) {
                     return RE::BSContainer::ForEachResult::kContinue;
                 }
@@ -61,7 +64,7 @@ namespace ActorShadowLimiter {
 
                 if (isShadowLight) {
                     // Check distance from player
-                    RE::NiPoint3 lightPos = ref.GetPosition();
+                    RE::NiPoint3 lightPos = ref->GetPosition();
                     float dx = lightPos.x - playerPos.x;
                     float dy = lightPos.y - playerPos.y;
                     float dz = lightPos.z - playerPos.z;
@@ -70,18 +73,18 @@ namespace ActorShadowLimiter {
                     // Limit search area
                     if (distSq <= (maxSearchRadius * maxSearchRadius)) {
                         float distance = std::sqrt(distSq);
-                        bool isDisabled = ref.IsDisabled();
-                        bool isDeleted = ref.IsDeleted();
-                        bool isInitiallyDisabled = ref.GetFormFlags() & 0x800;  // Initially disabled flag
+                        bool isDisabled = ref->IsDisabled();
+                        bool isDeleted = ref->IsDeleted();
+                        bool isInitiallyDisabled = ref->GetFormFlags() & 0x800;  // Initially disabled flag
                         bool hasLightAttached =
-                            ref.extraList.HasType(RE::ExtraDataType::kLight);  // Required by LightPlacer
+                            ref->extraList.HasType(RE::ExtraDataType::kLight);  // Required by LightPlacer
 
                         // Get light properties that LightPlacer might be modifying
                         int32_t radius = lightBaseObj->data.radius;
 
                         // Check for ExtraRadius override (XRDS)
                         int32_t actualRadius = radius;
-                        auto* extraRadius = ref.extraList.GetByType<RE::ExtraRadius>();
+                        auto* extraRadius = ref->extraList.GetByType<RE::ExtraRadius>();
                         if (extraRadius) {
                             actualRadius = static_cast<int32_t>(extraRadius->radius);
                         }
@@ -89,16 +92,13 @@ namespace ActorShadowLimiter {
                         // Check if the light is actually rendering by examining the NiLight node
                         bool isRendering = false;
                         if (hasLightAttached) {
-                            auto* extraLight = ref.extraList.GetByType<RE::ExtraLight>();
+                            auto* extraLight = ref->extraList.GetByType<RE::ExtraLight>();
                             if (extraLight && extraLight->lightData && extraLight->lightData->light) {
                                 auto* niLight = extraLight->lightData->light.get();
                                 // A light is rendering if the node exists and is not culled
                                 isRendering = niLight != nullptr;
                             }
                         }
-
-                        // Check if light can reach the player (within light's radius)
-                        bool canReachPlayer = distance <= actualRadius;
 
                         // Effective shadow distance: light radius + game's shadow distance setting
                         float effectiveShadowDistance = actualRadius + shadowDistance;
@@ -108,7 +108,7 @@ namespace ActorShadowLimiter {
                                    "Base: 0x%08X, Ref: 0x%08X, Radius: %d, "
                                    "ShadowDist: %.1f, EffectiveDist: %.1f, "
                                    "Disabled: %s, HasLight: %s",
-                                   lightBaseObj->GetFormID(), ref.GetFormID(), actualRadius, shadowDistance,
+                                   lightBaseObj->GetFormID(), ref->GetFormID(), actualRadius, shadowDistance,
                                    effectiveShadowDistance, isDisabled ? "YES" : "NO", hasLightAttached ? "YES" : "NO");
 
                         // Only count lights within effective shadow distance and actually emitting
