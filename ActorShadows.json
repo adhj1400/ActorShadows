@@ -2,6 +2,7 @@
   "handHeldLights": [
     {
       "formId": "0x0001D4EC",
+      "plugin": "Skyrim.esm",
       "rootNodeName": "TorchFire",
       "lightNodeName": "AttachLight",
       "offsetX": 2.0,
@@ -15,6 +16,7 @@
   "spells": [
     {
       "formId": "0x00043324",
+      "plugin": "Skyrim.esm",
       "rootNodeName": "Mover",
       "lightNodeName": "AttachLight",
       "offsetX": 0.0,

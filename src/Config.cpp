@@ -65,6 +65,7 @@ namespace ActorShadowLimiter {
                     if (!formIdStr.empty()) {
                         light.formId = std::stoul(formIdStr, nullptr, 0);
                     }
+                    light.plugin = ExtractValue(json, "plugin", objStart);
                     light.rootNodeName = ExtractValue(json, "rootNodeName", objStart);
                     light.lightNodeName = ExtractValue(json, "lightNodeName", objStart);
 
@@ -108,6 +109,7 @@ namespace ActorShadowLimiter {
                     if (!formIdStr.empty()) {
                         spell.formId = std::stoul(formIdStr, nullptr, 0);
                     }
+                    spell.plugin = ExtractValue(json, "plugin", objStart);
                     spell.rootNodeName = ExtractValue(json, "rootNodeName", objStart);
                     spell.lightNodeName = ExtractValue(json, "lightNodeName", objStart);
 
@@ -137,6 +139,30 @@ namespace ActorShadowLimiter {
 
         DebugPrint("CONFIG", "Loaded %zu hand-held lights and %zu spells from ActorShadows.json",
                    g_config.handHeldLights.size(), g_config.spells.size());
+    }
+
+    void ResolvePluginFormIDs() {
+        // Resolve plugin-based form IDs to runtime form IDs for handHeldLights
+        auto* dataHandler = RE::TESDataHandler::GetSingleton();
+        if (!dataHandler) {
+            DebugPrint("CONFIG", "Warning: Could not get TESDataHandler for plugin resolution");
+            return;
+        }
+
+        for (auto& lightConfig : g_config.handHeldLights) {
+            if (!lightConfig.plugin.empty() && lightConfig.formId != 0) {
+                uint32_t originalLocalFormId = lightConfig.formId;
+                auto* light = dataHandler->LookupForm<RE::TESObjectLIGH>(lightConfig.formId, lightConfig.plugin);
+                if (light) {
+                    lightConfig.formId = light->GetFormID();
+                    DebugPrint("CONFIG", "Resolved handHeldLight %s|0x%06X to runtime FormID 0x%08X",
+                               lightConfig.plugin.c_str(), originalLocalFormId, lightConfig.formId);
+                } else {
+                    DebugPrint("CONFIG", "Warning: HandHeldLight %s|0x%06X not found", lightConfig.plugin.c_str(),
+                               originalLocalFormId);
+                }
+            }
+        }
     }
 
     void LoadConfig() {
@@ -200,17 +226,45 @@ namespace ActorShadowLimiter {
         file.close();
         DebugPrint("CONFIG", "ActorShadows config loaded: ShadowLimit=%d, MaxSearchRadius=%.1f, Debug=%s",
                    g_config.shadowLightLimit, g_config.maxSearchRadius, g_config.enableDebug ? "ON" : "OFF");
+
+        // Resolve plugin-based form IDs to runtime form IDs
+        ResolvePluginFormIDs();
     }
 
     void BuildEffectToSpellMapping() {
         // Build mapping from configured spells to their light-emitting effects
         // This allows us to detect which configured spells are active by checking magic effects
-        for (const auto& spellConfig : g_config.spells) {
+        for (auto& spellConfig : g_config.spells) {
             if (spellConfig.formId == 0) continue;
 
-            auto* spell = RE::TESForm::LookupByID<RE::SpellItem>(spellConfig.formId);
+            RE::SpellItem* spell = nullptr;
+            uint32_t originalLocalFormId = spellConfig.formId;
+
+            // If plugin is specified, use plugin-based lookup
+            if (!spellConfig.plugin.empty()) {
+                auto* dataHandler = RE::TESDataHandler::GetSingleton();
+                if (dataHandler) {
+                    spell = dataHandler->LookupForm<RE::SpellItem>(spellConfig.formId, spellConfig.plugin);
+                    if (spell) {
+                        // Update formId to runtime ID for faster comparisons later
+                        spellConfig.formId = spell->GetFormID();
+                        DebugPrint("CONFIG", "Resolved %s|0x%06X to runtime FormID 0x%08X", spellConfig.plugin.c_str(),
+                                   originalLocalFormId, spell->GetFormID());
+                    }
+                }
+            } else {
+                // Use direct formId lookup
+                spell = RE::TESForm::LookupByID<RE::SpellItem>(spellConfig.formId);
+            }
+
             if (!spell || spell->effects.size() == 0) {
-                DebugPrint("CONFIG", "Warning: Spell FormID 0x%08X not found or has no effects", spellConfig.formId);
+                if (!spellConfig.plugin.empty()) {
+                    DebugPrint("CONFIG", "Warning: Spell %s|0x%06X not found or has no effects",
+                               spellConfig.plugin.c_str(), originalLocalFormId);
+                } else {
+                    DebugPrint("CONFIG", "Warning: Spell FormID 0x%08X not found or has no effects",
+                               spellConfig.formId);
+                }
                 continue;
             }
 

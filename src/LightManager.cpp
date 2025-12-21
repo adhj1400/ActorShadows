@@ -127,7 +127,7 @@ namespace ActorShadowLimiter {
         }
     }
 
-    void ForceReequipLight(RE::PlayerCharacter* player, bool wantShadows) {
+    void ForceReequipLight(RE::PlayerCharacter* player) {
         if (g_isReequipping) {
             return;
         }
@@ -243,7 +243,7 @@ namespace ActorShadowLimiter {
                         lightNode->local.rotate.SetEulerAnglesXYZ(rotateX * DEG_TO_RAD, rotateY * DEG_TO_RAD,
                                                                   rotateZ * DEG_TO_RAD);
 
-                                                // Update the node
+                        // Update the node
                         RE::NiUpdateData updateData;
                         lightNode->Update(updateData);
                         adjustedCount++;

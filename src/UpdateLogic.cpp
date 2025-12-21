@@ -79,7 +79,7 @@ namespace ActorShadowLimiter {
                 SetLightTypeNative(lightBase, newType);
 
                 // Force re-equip to update the reference
-                ForceReequipLight(player, wantShadows);
+                ForceReequipLight(player);
 
                 g_lastShadowStates[lightFormId] = wantShadows;
             }

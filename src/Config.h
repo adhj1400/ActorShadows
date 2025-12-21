@@ -7,6 +7,7 @@ namespace ActorShadowLimiter {
 
     struct HandHeldLightConfig {
         uint32_t formId = 0;
+        std::string plugin;  // Optional: ESP/ESM name for this form ID
         std::string rootNodeName;
         std::string lightNodeName;
         float offsetX = 0.0f;
@@ -19,6 +20,7 @@ namespace ActorShadowLimiter {
 
     struct SpellConfig {
         uint32_t formId = 0;
+        std::string plugin;  // Optional: ESP/ESM name for this form ID
         std::string rootNodeName;
         std::string lightNodeName;
         float offsetX = 0.0f;
