@@ -8,7 +8,6 @@
 #include "RE/Skyrim.h"
 
 namespace ActorShadowLimiter {
-
     using FLAGS = RE::TES_LIGHT_FLAGS;
 
     // Light type enumeration
@@ -30,5 +29,4 @@ namespace ActorShadowLimiter {
 
     // Mutex for thread-safe light modifications
     extern std::mutex g_lightModificationMutex;
-
 }
