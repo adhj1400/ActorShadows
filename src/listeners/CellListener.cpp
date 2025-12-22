@@ -7,7 +7,6 @@
 #include "../utils/Console.h"
 
 namespace ActorShadowLimiter {
-
     CellListener* CellListener::GetSingleton() {
         static CellListener instance;
         return &instance;
@@ -32,26 +31,17 @@ namespace ActorShadowLimiter {
             return RE::BSEventNotifyControl::kContinue;
         }
 
-        // Check if player has configured items active
         auto activeLight = GetActiveConfiguredLight(player);
         auto activeSpells = GetActiveConfiguredSpells(player);
 
         if (!activeLight.has_value() && activeSpells.empty()) {
-            // No configured items active, skip processing
             return RE::BSEventNotifyControl::kContinue;
         }
 
-        DebugPrint("UPDATE", "Cell fully loaded. Rechecking shadow state.");
-
-        // Reset equipped lights and active spells to no-shadow variant, to avoid
-        // crashes if new cells has too many lights
         ResetEquippedLightToNoShadow(player);
         ResetActiveSpellsToNoShadow(player);
-
-        // Start polling thread
         StartShadowPollThread();
 
         return RE::BSEventNotifyControl::kContinue;
     }
-
 }
