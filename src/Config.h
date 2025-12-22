@@ -46,5 +46,6 @@ namespace ActorShadowLimiter {
     extern Config g_config;
     void LoadConfig();
     void BuildEffectToSpellMapping();
-
+    bool IsInConfig(RE::TESObjectLIGH* lightBase);
+    bool IsInConfig(RE::SpellItem* spell);
 }

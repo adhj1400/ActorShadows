@@ -9,6 +9,24 @@ namespace ActorShadowLimiter {
 
     Config g_config;
 
+    bool IsInConfig(RE::TESObjectLIGH* lightBase) {
+        for (const auto& config : g_config.handHeldLights) {
+            if (config.formId == lightBase->GetFormID()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool IsInConfig(RE::SpellItem* spell) {
+        for (const auto& config : g_config.spells) {
+            if (config.formId == spell->GetFormID()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     static std::string ReadFileText(const std::string& path) {
         std::ifstream f(path);
         if (!f.is_open()) return "";

@@ -38,16 +38,7 @@ namespace ActorShadowLimiter {
 
         uint32_t spellFormId = spell->GetFormID();
 
-        // Check if this spell is in our configuration
-        bool isConfigured = false;
-        for (const auto& config : g_config.spells) {
-            if (config.formId == spellFormId) {
-                isConfigured = true;
-                break;
-            }
-        }
-
-        if (!isConfigured) {
+        if (!IsInConfig(spell)) {
             return RE::BSEventNotifyControl::kContinue;
         }
 

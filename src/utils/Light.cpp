@@ -31,6 +31,15 @@ namespace ActorShadowLimiter {
         return static_cast<std::uint32_t>(LightType::HemiNS);
     }
 
+    bool HasShadows(const RE::TESObjectLIGH* a_light) {
+        if (!a_light) {
+            return false;
+        }
+
+        const auto& flags = a_light->data.flags;
+        return flags.any(FLAGS::kHemiShadow, FLAGS::kOmniShadow, FLAGS::kSpotShadow);
+    }
+
     void SetLightTypeNative(RE::TESObjectLIGH* a_light, std::uint32_t a_type) {
         if (!a_light) {
             return;
