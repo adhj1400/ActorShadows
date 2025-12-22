@@ -1,11 +1,11 @@
+#include "Config.h"
+#include "Globals.h"
 #include "SKSE/SKSE.h"
-#include "src/Config.h"
-#include "src/Globals.h"
-#include "src/UpdateLogic.h"
-#include "src/listeners/CellListener.h"
-#include "src/listeners/EquipListener.h"
-#include "src/listeners/SpellCastListener.h"
-#include "src/utils/Console.h"
+#include "UpdateLogic.h"
+#include "listeners/CellListener.h"
+#include "listeners/EquipListener.h"
+#include "listeners/SpellCastListener.h"
+#include "utils/Console.h"
 
 using namespace SKSE;
 using namespace ActorShadowLimiter;

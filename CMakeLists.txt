@@ -13,7 +13,7 @@ endif()
 find_package(CommonLibSSE CONFIG REQUIRED)
 
 add_commonlibsse_plugin(${PROJECT_NAME} SOURCES 
-    main.cpp
+    src/main.cpp
     src/Config.cpp
     src/Globals.cpp
     src/utils/MagicEffect.cpp
