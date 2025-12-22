@@ -48,7 +48,7 @@ namespace ActorShadowLimiter {
         g_lastShadowStates[spellFormId] = false;
 
         // Start polling if not already running
-        StartShadowPollThread();
+        EnablePolling();
 
         // Immediate check
         UpdatePlayerLightShadows();

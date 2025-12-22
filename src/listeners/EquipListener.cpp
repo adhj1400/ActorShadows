@@ -70,7 +70,7 @@ namespace ActorShadowLimiter {
         DebugPrint("EQUIP", "Configured hand-held light 0x%08X equipped. Starting tracking.", lightFormId);
 
         g_lastShadowStates[lightFormId] = false;
-        StartShadowPollThread();
+        EnablePolling();
         UpdatePlayerLightShadows();
 
         return RE::BSEventNotifyControl::kContinue;

@@ -40,7 +40,7 @@ namespace ActorShadowLimiter {
 
         ResetEquippedLightToNoShadow(player);
         ResetActiveSpellsToNoShadow(player);
-        StartShadowPollThread();
+        EnablePolling();
 
         return RE::BSEventNotifyControl::kContinue;
     }

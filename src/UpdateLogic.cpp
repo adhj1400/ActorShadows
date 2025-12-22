@@ -156,7 +156,11 @@ namespace ActorShadowLimiter {
         bool noActiveItems = !hasActiveLight && !hasActiveSpells;
 
         if (noActiveItems) {
-            g_pollThreadRunning = false;
+            if (g_shouldPoll) {
+                DebugPrint("UPDATE", "No configured lights or spells active - disabling polling");
+                g_shouldPoll = false;
+            }
+            return;
         } else if (hasActiveLight && !hasActiveSpells) {
             HandleHeldLightsLogic(activeLight, wantShadows);
         } else if (hasActiveSpells && !hasActiveLight) {
@@ -165,6 +169,11 @@ namespace ActorShadowLimiter {
     }
 
     void StartShadowPollThread() {
+        // Check if thread is already running
+        if (g_pollThreadRunning) {
+            return;
+        }
+
         bool expected = false;
         if (!g_pollThreadRunning.compare_exchange_strong(expected, true)) {
             return;
@@ -181,12 +190,31 @@ namespace ActorShadowLimiter {
                     break;
                 }
 
-                if (auto* tasks = SKSE::GetTaskInterface()) {
-                    tasks->AddTask([]() { UpdatePlayerLightShadows(); });
+                // Only poll if we should be polling
+                if (g_shouldPoll) {
+                    if (auto* tasks = SKSE::GetTaskInterface()) {
+                        tasks->AddTask([]() { UpdatePlayerLightShadows(); });
+                    }
                 }
             }
             DebugPrint("UPDATE", "Shadow poll thread stopped");
         }).detach();
         DebugPrint("UPDATE", "Shadow poll thread started (%ds interval)", g_config.pollIntervalSeconds);
+    }
+
+    void EnablePolling() {
+        if (!g_shouldPoll) {
+            DebugPrint("UPDATE", "Enabling shadow polling");
+            g_shouldPoll = true;
+            // Start the thread if it's not already running
+            StartShadowPollThread();
+        }
+    }
+
+    void DisablePolling() {
+        if (g_shouldPoll) {
+            DebugPrint("UPDATE", "Disabling shadow polling");
+            g_shouldPoll = false;
+        }
     }
 }
