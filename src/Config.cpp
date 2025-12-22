@@ -27,6 +27,15 @@ namespace ActorShadowLimiter {
         return false;
     }
 
+    bool IsInConfig(RE::TESObjectARMO* armor) {
+        for (const auto& config : g_config.enchantedArmors) {
+            if (config.formId == armor->GetFormID()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     static std::string ReadFileText(const std::string& path) {
         std::ifstream f(path);
         if (!f.is_open()) return "";
@@ -155,8 +164,52 @@ namespace ActorShadowLimiter {
             }
         }
 
-        DebugPrint("CONFIG", "Loaded %zu hand-held lights and %zu spells from ActorShadows.json",
-                   g_config.handHeldLights.size(), g_config.spells.size());
+        // Parse enchantedArmors array
+        size_t armorStart = json.find("\"enchantedArmors\"");
+        if (armorStart != std::string::npos) {
+            size_t arrayStart = json.find('[', armorStart);
+            size_t arrayEnd = json.find(']', arrayStart);
+            if (arrayStart != std::string::npos && arrayEnd != std::string::npos) {
+                size_t objStart = arrayStart;
+                while ((objStart = json.find('{', objStart)) != std::string::npos && objStart < arrayEnd) {
+                    size_t objEnd = json.find('}', objStart);
+                    if (objEnd == std::string::npos || objEnd > arrayEnd) break;
+
+                    EnchantedArmorConfig armor;
+                    std::string formIdStr = ExtractValue(json, "formId", objStart);
+                    if (!formIdStr.empty()) {
+                        armor.formId = std::stoul(formIdStr, nullptr, 0);
+                    }
+                    armor.plugin = ExtractValue(json, "plugin", objStart);
+                    armor.rootNodeName = ExtractValue(json, "rootNodeName", objStart);
+                    armor.lightNodeName = ExtractValue(json, "lightNodeName", objStart);
+
+                    std::string offsetX = ExtractValue(json, "offsetX", objStart);
+                    if (!offsetX.empty()) armor.offsetX = std::stof(offsetX);
+
+                    std::string offsetY = ExtractValue(json, "offsetY", objStart);
+                    if (!offsetY.empty()) armor.offsetY = std::stof(offsetY);
+
+                    std::string offsetZ = ExtractValue(json, "offsetZ", objStart);
+                    if (!offsetZ.empty()) armor.offsetZ = std::stof(offsetZ);
+
+                    std::string rotateX = ExtractValue(json, "rotateX", objStart);
+                    if (!rotateX.empty()) armor.rotateX = std::stof(rotateX);
+
+                    std::string rotateY = ExtractValue(json, "rotateY", objStart);
+                    if (!rotateY.empty()) armor.rotateY = std::stof(rotateY);
+
+                    std::string rotateZ = ExtractValue(json, "rotateZ", objStart);
+                    if (!rotateZ.empty()) armor.rotateZ = std::stof(rotateZ);
+
+                    g_config.enchantedArmors.push_back(armor);
+                    objStart = objEnd + 1;
+                }
+            }
+        }
+
+        DebugPrint("CONFIG", "Loaded %zu hand-held lights, %zu spells, and %zu enchanted armors from ActorShadows.json",
+                   g_config.handHeldLights.size(), g_config.spells.size(), g_config.enchantedArmors.size());
     }
 
     void ResolvePluginFormIDs() {
@@ -177,6 +230,22 @@ namespace ActorShadowLimiter {
                                lightConfig.plugin.c_str(), originalLocalFormId, lightConfig.formId);
                 } else {
                     DebugPrint("CONFIG", "Warning: HandHeldLight %s|0x%06X not found", lightConfig.plugin.c_str(),
+                               originalLocalFormId);
+                }
+            }
+        }
+
+        // Resolve plugin-based form IDs for enchantedArmors
+        for (auto& armorConfig : g_config.enchantedArmors) {
+            if (!armorConfig.plugin.empty() && armorConfig.formId != 0) {
+                uint32_t originalLocalFormId = armorConfig.formId;
+                auto* armor = dataHandler->LookupForm<RE::TESObjectARMO>(armorConfig.formId, armorConfig.plugin);
+                if (armor) {
+                    armorConfig.formId = armor->GetFormID();
+                    DebugPrint("CONFIG", "Resolved enchantedArmor %s|0x%06X to runtime FormID 0x%08X",
+                               armorConfig.plugin.c_str(), originalLocalFormId, armorConfig.formId);
+                } else {
+                    DebugPrint("CONFIG", "Warning: EnchantedArmor %s|0x%06X not found", armorConfig.plugin.c_str(),
                                originalLocalFormId);
                 }
             }

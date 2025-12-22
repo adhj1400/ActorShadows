@@ -30,6 +30,19 @@ namespace ActorShadowLimiter {
         float rotateZ = 0.0f;
     };
 
+    struct EnchantedArmorConfig {
+        uint32_t formId = 0;  // Armor's base form ID
+        std::string plugin;   // Optional: ESP/ESM name for this form ID
+        std::string rootNodeName;
+        std::string lightNodeName;
+        float offsetX = 0.0f;
+        float offsetY = 0.0f;
+        float offsetZ = 0.0f;
+        float rotateX = 0.0f;
+        float rotateY = 0.0f;
+        float rotateZ = 0.0f;
+    };
+
     struct Config {
         int shadowLightLimit = 4;
         bool enableDebug = false;
@@ -40,6 +53,7 @@ namespace ActorShadowLimiter {
 
         std::vector<HandHeldLightConfig> handHeldLights;
         std::vector<SpellConfig> spells;
+        std::vector<EnchantedArmorConfig> enchantedArmors;
     };
 
     extern Config g_config;
@@ -47,4 +61,5 @@ namespace ActorShadowLimiter {
     void BuildEffectToSpellMapping();
     bool IsInConfig(RE::TESObjectLIGH* lightBase);
     bool IsInConfig(RE::SpellItem* spell);
+    bool IsInConfig(RE::TESObjectARMO* armor);
 }

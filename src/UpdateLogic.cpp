@@ -128,6 +128,41 @@ namespace ActorShadowLimiter {
         }
     }
 
+    void HandleEnchantedArmorLogic(std::vector<uint32_t> activeArmors, bool wantShadows) {
+        for (uint32_t armorFormId : activeArmors) {
+            auto* armor = RE::TESForm::LookupByID<RE::TESObjectARMO>(armorFormId);
+            if (!armor) continue;
+
+            auto* armorLight = GetLightFromEnchantedArmor(armor);
+            if (!armorLight) continue;
+
+            // Only update if state changed from last known state
+            bool lastState = g_lastShadowStates[armorFormId];
+            if (wantShadows != lastState) {
+                DebugPrint("UPDATE", "Enchanted armor 0x%08X shadow state changed: %s", armorFormId,
+                           wantShadows ? "ENABLE" : "DISABLE");
+
+                // Get current light type to remember original
+                uint8_t currentLightType = static_cast<uint8_t>(GetLightType(armorLight));
+
+                // Remember the original type
+                if (g_originalLightTypes.find(armorFormId) == g_originalLightTypes.end()) {
+                    g_originalLightTypes[armorFormId] = currentLightType;
+                }
+
+                // Modify the base form
+                uint8_t newType =
+                    wantShadows ? static_cast<uint8_t>(LightType::OmniShadow) : static_cast<uint8_t>(LightType::OmniNS);
+                SetLightTypeNative(armorLight, newType);
+
+                // TODO: Force re-equip armor to update the reference
+                // For now, the light change will take effect on next cell load or re-equip
+
+                g_lastShadowStates[armorFormId] = wantShadows;
+            }
+        }
+    }
+
     void UpdatePlayerLightShadows() {
         auto* player = RE::PlayerCharacter::GetSingleton();
         if (!player) {
@@ -151,20 +186,31 @@ namespace ActorShadowLimiter {
         bool wantShadows = (shadowLightCount < g_config.shadowLightLimit);
         auto activeSpells = GetActiveConfiguredSpells(player);
         auto activeLight = GetActiveConfiguredLight(player);
+        auto activeArmors = GetActiveConfiguredEnchantedArmors(player);
         bool hasActiveLight = activeLight.has_value();
         bool hasActiveSpells = !activeSpells.empty();
-        bool noActiveItems = !hasActiveLight && !hasActiveSpells;
+        bool hasActiveArmors = !activeArmors.empty();
+        bool noActiveItems = !hasActiveLight && !hasActiveSpells && !hasActiveArmors;
 
         if (noActiveItems) {
             if (g_shouldPoll) {
-                DebugPrint("UPDATE", "No configured lights or spells active - disabling polling");
+                DebugPrint("UPDATE", "No configured lights, spells, or armors active - disabling polling");
                 g_shouldPoll = false;
             }
             return;
-        } else if (hasActiveLight && !hasActiveSpells) {
-            HandleHeldLightsLogic(activeLight, wantShadows);
-        } else if (hasActiveSpells && !hasActiveLight) {
-            HandleSpellLogic(activeSpells, wantShadows);
+        }
+
+        // Only handle if exactly one item type is active (skip if multiple types active)
+        int activeCount = (hasActiveLight ? 1 : 0) + (hasActiveSpells ? 1 : 0) + (hasActiveArmors ? 1 : 0);
+
+        if (activeCount == 1) {
+            if (hasActiveLight) {
+                HandleHeldLightsLogic(activeLight, wantShadows);
+            } else if (hasActiveSpells) {
+                HandleSpellLogic(activeSpells, wantShadows);
+            } else if (hasActiveArmors) {
+                HandleEnchantedArmorLogic(activeArmors, wantShadows);
+            }
         }
     }
 

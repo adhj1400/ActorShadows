@@ -6,6 +6,7 @@
 #include "listeners/EquipListener.h"
 #include "listeners/SpellCastListener.h"
 #include "utils/Console.h"
+#include "utils/Helpers.h"
 
 using namespace SKSE;
 using namespace ActorShadowLimiter;
@@ -23,6 +24,9 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
             EquipListener::Install();
             SpellCastListener::Install();
             CellListener::Install();
+
+            // Validate config items don't have shadows enabled
+            CheckSanity();
         }
     });
 

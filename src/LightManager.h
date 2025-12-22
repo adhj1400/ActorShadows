@@ -11,4 +11,6 @@ namespace ActorShadowLimiter {
     void AdjustSpellLightPosition(RE::PlayerCharacter* player, uint32_t spellFormId);
     std::vector<uint32_t> GetActiveConfiguredSpells(RE::PlayerCharacter* player);
     std::optional<uint32_t> GetActiveConfiguredLight(RE::PlayerCharacter* player);
+    std::vector<uint32_t> GetActiveConfiguredEnchantedArmors(RE::PlayerCharacter* player);
+    RE::TESObjectLIGH* GetLightFromEnchantedArmor(RE::TESObjectARMO* armor);
 }

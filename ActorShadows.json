@@ -1,7 +1,7 @@
 {
   "handHeldLights": [
     {
-      "formId": "0x0001D4EC",
+      "formId": "0x01D4EC",
       "plugin": "Skyrim.esm",
       "rootNodeName": "TorchFire",
       "lightNodeName": "AttachLight",
@@ -15,7 +15,7 @@
   ],
   "spells": [
     {
-      "formId": "0x00043324",
+      "formId": "0x043324",
       "plugin": "Skyrim.esm",
       "rootNodeName": "Mover",
       "lightNodeName": "AttachLight",
@@ -25,6 +25,56 @@
       "rotateX": 0.0,
       "rotateY": -20.0,
       "rotateZ": 90.0
+    }
+  ],
+  "enchantedArmors": [
+    {
+      "formId": "0x000D63",
+      "plugin": "QwibNewLanterns.esp",
+      "rootNodeName": "NPC",
+      "lightNodeName": "AttachLight",
+      "offsetX": 0.0,
+      "offsetY": 0.0,
+      "offsetZ": 0.0,
+      "rotateX": 0.0,
+      "rotateY": 0.0,
+      "rotateZ": 0.0
+    },
+    {
+      "formId": "0x001D96",
+      "plugin": "QwibNewLanterns.esp",
+      "rootNodeName": "NPC",
+      "lightNodeName": "AttachLight",
+      "offsetX": 0.0,
+      "offsetY": 0.0,
+      "offsetZ": 0.0,
+      "rotateX": 0.0,
+      "rotateY": 0.0,
+      "rotateZ": 0.0
+    },
+    {
+      "formId": "0x002301",
+      "plugin": "QwibNewLanterns.esp",
+      "rootNodeName": "NPC",
+      "lightNodeName": "AttachLight",
+      "offsetX": 0.0,
+      "offsetY": 0.0,
+      "offsetZ": 0.0,
+      "rotateX": 0.0,
+      "rotateY": 0.0,
+      "rotateZ": 0.0
+    },
+    {
+      "formId": "0x003DF3",
+      "plugin": "QwibNewLanterns.esp",
+      "rootNodeName": "NPC",
+      "lightNodeName": "AttachLight",
+      "offsetX": 0.0,
+      "offsetY": 0.0,
+      "offsetZ": 0.0,
+      "rotateX": 0.0,
+      "rotateY": 0.0,
+      "rotateZ": 0.0
     }
   ]
 }

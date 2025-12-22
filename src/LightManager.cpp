@@ -356,4 +356,56 @@ namespace ActorShadowLimiter {
         return std::nullopt;
     }
 
+    // Get all equipped enchanted armors from config
+    std::vector<uint32_t> GetActiveConfiguredEnchantedArmors(RE::PlayerCharacter* player) {
+        std::vector<uint32_t> activeArmors;
+        if (!player) return activeArmors;
+
+        auto inv = player->GetInventory();
+
+        for (const auto& [item, data] : inv) {
+            if (!item || !data.second) continue;
+            if (!data.second->IsWorn()) continue;
+
+            auto* armor = item->As<RE::TESObjectARMO>();
+            if (!armor) continue;
+
+            // Check if this armor is in our configuration
+            for (const auto& config : g_config.enchantedArmors) {
+                if (config.formId == armor->GetFormID()) {
+                    activeArmors.push_back(armor->GetFormID());
+                    break;
+                }
+            }
+        }
+
+        return activeArmors;
+    }
+
+    // Get the light from an enchanted armor's enchantment
+    RE::TESObjectLIGH* GetLightFromEnchantedArmor(RE::TESObjectARMO* armor) {
+        if (!armor || !armor->formEnchanting) {
+            return nullptr;
+        }
+
+        auto* enchantment = armor->formEnchanting;
+        if (!enchantment || enchantment->effects.size() == 0) {
+            return nullptr;
+        }
+
+        // Find the light-associated effect
+        for (auto* effect : enchantment->effects) {
+            if (!effect || !effect->baseEffect) continue;
+            auto* assocForm = effect->baseEffect->data.associatedForm;
+            if (!assocForm) continue;
+
+            auto* light = assocForm->As<RE::TESObjectLIGH>();
+            if (light) {
+                return light;
+            }
+        }
+
+        return nullptr;
+    }
+
 }
