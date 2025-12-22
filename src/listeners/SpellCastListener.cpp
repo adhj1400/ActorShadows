@@ -4,6 +4,7 @@
 #include "../Globals.h"
 #include "../UpdateLogic.h"
 #include "../utils/Console.h"
+#include "../utils/Helpers.h"
 
 namespace ActorShadowLimiter {
 
@@ -26,8 +27,7 @@ namespace ActorShadowLimiter {
             return RE::BSEventNotifyControl::kContinue;
         }
 
-        auto* player = RE::PlayerCharacter::GetSingleton();
-        if (!player || event->object->GetHandle() != player->GetHandle()) {
+        if (!IsPlayer(event->object.get())) {
             return RE::BSEventNotifyControl::kContinue;
         }
 
@@ -44,13 +44,9 @@ namespace ActorShadowLimiter {
 
         DebugPrint("SPELLCAST", "Configured spell 0x%08X cast detected. Starting tracking.", spellFormId);
 
-        // Reset state for this spell
         g_lastShadowStates[spellFormId] = false;
 
-        // Start polling if not already running
         EnablePolling();
-
-        // Immediate check
         UpdatePlayerLightShadows();
 
         return RE::BSEventNotifyControl::kContinue;

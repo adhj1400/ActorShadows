@@ -19,6 +19,7 @@ add_commonlibsse_plugin(${PROJECT_NAME} SOURCES
     src/utils/MagicEffect.cpp
     src/utils/Console.cpp
     src/utils/Light.cpp
+    src/utils/Helpers.cpp
     src/LightManager.cpp
     src/utils/ShadowCounter.cpp
     src/UpdateLogic.cpp

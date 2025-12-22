@@ -5,6 +5,7 @@
 #include "../LightManager.h"
 #include "../UpdateLogic.h"
 #include "../utils/Console.h"
+#include "../utils/Helpers.h"
 #include "../utils/Light.h"
 
 namespace ActorShadowLimiter {
@@ -28,8 +29,8 @@ namespace ActorShadowLimiter {
             return RE::BSEventNotifyControl::kContinue;
         }
 
-        auto* player = RE::PlayerCharacter::GetSingleton();
-        if (!player || event->actor->GetHandle() != player->GetHandle()) {
+        auto* actor = event->actor.get();
+        if (!IsPlayer(actor)) {
             return RE::BSEventNotifyControl::kContinue;
         }
 
