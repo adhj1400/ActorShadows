@@ -7,6 +7,7 @@
 #include "../utils/Console.h"
 #include "../utils/Helpers.h"
 #include "../utils/Light.h"
+#include "../utils/ShadowCounter.h"
 
 namespace ActorShadowLimiter {
 
@@ -58,19 +59,22 @@ namespace ActorShadowLimiter {
                     SetLightTypeNative(lightBase, g_originalLightTypes[lightFormId]);
                 }
 
-                auto* pl = RE::PlayerCharacter::GetSingleton();
-                if (pl) {
-                    AdjustHeldLightPosition(pl);
+                auto* player = RE::PlayerCharacter::GetSingleton();
+
+                if (player) {
+                    AdjustHeldLightPosition(player);
                 }
+                g_lastShadowStates[lightFormId] = true;
 
                 return RE::BSEventNotifyControl::kContinue;
+            } else {
+                g_lastShadowStates[lightFormId] = false;
+                UpdatePlayerLightShadows();
             }
 
             DebugPrint("EQUIP", "Configured hand-held light 0x%08X equipped. Starting tracking.", lightFormId);
 
-            g_lastShadowStates[lightFormId] = false;
             EnablePolling();
-            UpdatePlayerLightShadows();
 
             return RE::BSEventNotifyControl::kContinue;
         }
@@ -82,14 +86,8 @@ namespace ActorShadowLimiter {
                 return RE::BSEventNotifyControl::kContinue;
             }
 
-            DebugPrint("EQUIP", "Configured enchanted armor 0x%08X equipped. Starting tracking.",
-                       armorBase->GetFormID());
-
-            g_lastShadowStates[armorBase->GetFormID()] = false;
             EnablePolling();
-            UpdatePlayerLightShadows();
-
-            return RE::BSEventNotifyControl::kContinue;
+            UpdatePlayerLightShadows(true);
         }
 
         return RE::BSEventNotifyControl::kContinue;

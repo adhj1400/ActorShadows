@@ -86,4 +86,52 @@ namespace ActorShadowLimiter {
         }
     }
 
+    void PrintPlayerNiNodeTree() {
+        auto* player = RE::PlayerCharacter::GetSingleton();
+        if (!player) {
+            DebugPrint("NITREE", "Player singleton not found");
+            return;
+        }
+
+        auto printNodeRecursive = [](RE::NiAVObject* node, int depth, auto& self) -> void {
+            if (!node) return;
+
+            std::string indent(depth * 2, ' ');
+            std::string nodeName = node->name.c_str() ? node->name.c_str() : "<unnamed>";
+            std::string nodeType = "NiAVObject";
+
+            if (node->AsNode()) {
+                nodeType = "NiNode";
+            }
+
+            DebugPrint("NITREE", "%s%s [%s] (0x%p)", indent.c_str(), nodeName.c_str(), nodeType.c_str(), node);
+
+            // If this is a node, recurse through children
+            if (auto* niNode = node->AsNode()) {
+                for (auto& child : niNode->GetChildren()) {
+                    if (child) {
+                        self(child.get(), depth + 1, self);
+                    }
+                }
+            }
+        };
+
+        DebugPrint("NITREE", "=== Player NiNode Tree (First Person) ===");
+        auto* firstPerson3D = player->Get3D(true);
+        if (firstPerson3D) {
+            printNodeRecursive(firstPerson3D, 0, printNodeRecursive);
+        } else {
+            DebugPrint("NITREE", "First person 3D model not found");
+        }
+
+        DebugPrint("NITREE", "");
+        DebugPrint("NITREE", "=== Player NiNode Tree (Third Person) ===");
+        auto* thirdPerson3D = player->Get3D(false);
+        if (thirdPerson3D) {
+            printNodeRecursive(thirdPerson3D, 0, printNodeRecursive);
+        } else {
+            DebugPrint("NITREE", "Third person 3D model not found");
+        }
+    }
+
 }

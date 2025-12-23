@@ -6,7 +6,7 @@
       "rootNodeName": "TorchFire",
       "lightNodeName": "AttachLight",
       "offsetX": 2.0,
-      "offsetY": 15.0,
+      "offsetY": 30.0,
       "offsetZ": -2.0,
       "rotateX": -20.0,
       "rotateY": 0.0,
@@ -33,7 +33,7 @@
       "plugin": "QwibNewLanterns.esp",
       "rootNodeName": "NPC",
       "lightNodeName": "AttachLight",
-      "offsetX": 0.0,
+      "offsetX": 100.0,
       "offsetY": 0.0,
       "offsetZ": 0.0,
       "rotateX": 0.0,
@@ -43,38 +43,38 @@
     {
       "formId": "0x001D96",
       "plugin": "QwibNewLanterns.esp",
-      "rootNodeName": "NPC",
+      "rootNodeName": "WaterBreathingTargetFX",
       "lightNodeName": "AttachLight",
       "offsetX": 0.0,
-      "offsetY": 0.0,
+      "offsetY": 20.0,
       "offsetZ": 0.0,
       "rotateX": 0.0,
       "rotateY": 0.0,
-      "rotateZ": 0.0
+      "rotateZ": 90.0
     },
     {
       "formId": "0x002301",
       "plugin": "QwibNewLanterns.esp",
-      "rootNodeName": "NPC",
+      "rootNodeName": "WaterBreathingTargetFX",
       "lightNodeName": "AttachLight",
       "offsetX": 0.0,
-      "offsetY": 0.0,
+      "offsetY": 20.0,
       "offsetZ": 0.0,
       "rotateX": 0.0,
       "rotateY": 0.0,
-      "rotateZ": 0.0
+      "rotateZ": 90.0
     },
     {
       "formId": "0x003DF3",
       "plugin": "QwibNewLanterns.esp",
-      "rootNodeName": "NPC",
+      "rootNodeName": "WaterBreathingTargetFX",
       "lightNodeName": "AttachLight",
       "offsetX": 0.0,
-      "offsetY": 0.0,
+      "offsetY": 20.0,
       "offsetZ": 0.0,
       "rotateX": 0.0,
       "rotateY": 0.0,
-      "rotateZ": 0.0
+      "rotateZ": 90.0
     }
   ]
 }

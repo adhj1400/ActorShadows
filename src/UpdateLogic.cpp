@@ -8,6 +8,7 @@
 #include "LightManager.h"
 #include "SKSE/SKSE.h"
 #include "utils/Console.h"
+#include "utils/Helpers.h"
 #include "utils/Light.h"
 #include "utils/MagicEffect.h"
 #include "utils/ShadowCounter.h"
@@ -128,7 +129,7 @@ namespace ActorShadowLimiter {
         }
     }
 
-    void HandleEnchantedArmorLogic(std::vector<uint32_t> activeArmors, bool wantShadows) {
+    void HandleEnchantedArmorLogic(std::vector<uint32_t> activeArmors, bool wantShadows, bool initialEquip) {
         for (uint32_t armorFormId : activeArmors) {
             auto* armor = RE::TESForm::LookupByID<RE::TESObjectARMO>(armorFormId);
             if (!armor) continue;
@@ -136,34 +137,72 @@ namespace ActorShadowLimiter {
             auto* armorLight = GetLightFromEnchantedArmor(armor);
             if (!armorLight) continue;
 
-            // Only update if state changed from last known state
             bool lastState = g_lastShadowStates[armorFormId];
             if (wantShadows != lastState) {
-                DebugPrint("UPDATE", "Enchanted armor 0x%08X shadow state changed: %s", armorFormId,
-                           wantShadows ? "ENABLE" : "DISABLE");
-
-                // Get current light type to remember original
                 uint8_t currentLightType = static_cast<uint8_t>(GetLightType(armorLight));
 
-                // Remember the original type
                 if (g_originalLightTypes.find(armorFormId) == g_originalLightTypes.end()) {
                     g_originalLightTypes[armorFormId] = currentLightType;
                 }
 
-                // Modify the base form
                 uint8_t newType =
                     wantShadows ? static_cast<uint8_t>(LightType::OmniShadow) : static_cast<uint8_t>(LightType::OmniNS);
                 SetLightTypeNative(armorLight, newType);
 
-                // TODO: Force re-equip armor to update the reference
-                // For now, the light change will take effect on next cell load or re-equip
+                // Re-equip armor after a delay to let the base form change settle
+                // We can skip this if it's the initial equip, because the light hasnt been spawned yet
+                if (!initialEquip) {
+                    std::thread([armor, armorLight, armorFormId]() {
+                        using namespace std::chrono_literals;
+                        std::this_thread::sleep_for(100ms);
+
+                        if (auto* tasks = SKSE::GetTaskInterface()) {
+                            tasks->AddTask([armor, armorLight, armorFormId]() {
+                                auto* pl = RE::PlayerCharacter::GetSingleton();
+                                if (pl) {
+                                    ForceReequipArmor(pl, armor);
+                                }
+
+                                std::thread([armorLight, armorFormId]() {
+                                    std::this_thread::sleep_for(500ms);
+
+                                    if (auto* tasks2 = SKSE::GetTaskInterface()) {
+                                        tasks2->AddTask([armorLight, armorFormId]() {
+                                            if (g_originalLightTypes.find(armorFormId) != g_originalLightTypes.end()) {
+                                                uint32_t originalType = g_originalLightTypes[armorFormId];
+                                                SetLightTypeNative(armorLight, originalType);
+                                            }
+                                        });
+                                    }
+                                }).detach();
+                            });
+                        }
+                    }).detach();
+                }
+
+                if (IsOfShadowType(newType)) {
+                    std::thread([armorFormId]() {
+                        using namespace std::chrono_literals;
+                        std::this_thread::sleep_for(500ms);  // These can be quite slow, wait longer
+
+                        if (auto* tasks = SKSE::GetTaskInterface()) {
+                            tasks->AddTask([armorFormId]() {
+                                auto* pl = RE::PlayerCharacter::GetSingleton();
+                                if (pl) {
+                                    PrintPlayerNiNodeTree();
+                                    AdjustEnchantmentLightPosition(pl, armorFormId);
+                                }
+                            });
+                        }
+                    }).detach();
+                }
 
                 g_lastShadowStates[armorFormId] = wantShadows;
             }
         }
     }
 
-    void UpdatePlayerLightShadows() {
+    void UpdatePlayerLightShadows(bool initialEquip) {
         auto* player = RE::PlayerCharacter::GetSingleton();
         if (!player) {
             return;
@@ -187,10 +226,10 @@ namespace ActorShadowLimiter {
         auto activeSpells = GetActiveConfiguredSpells(player);
         auto activeLight = GetActiveConfiguredLight(player);
         auto activeArmors = GetActiveConfiguredEnchantedArmors(player);
-        bool hasActiveLight = activeLight.has_value();
+        bool hasActiveTorch = activeLight.has_value();
         bool hasActiveSpells = !activeSpells.empty();
         bool hasActiveArmors = !activeArmors.empty();
-        bool noActiveItems = !hasActiveLight && !hasActiveSpells && !hasActiveArmors;
+        bool noActiveItems = !hasActiveTorch && !hasActiveSpells && !hasActiveArmors;
 
         if (noActiveItems) {
             if (g_shouldPoll) {
@@ -200,17 +239,12 @@ namespace ActorShadowLimiter {
             return;
         }
 
-        // Only handle if exactly one item type is active (skip if multiple types active)
-        int activeCount = (hasActiveLight ? 1 : 0) + (hasActiveSpells ? 1 : 0) + (hasActiveArmors ? 1 : 0);
-
-        if (activeCount == 1) {
-            if (hasActiveLight) {
-                HandleHeldLightsLogic(activeLight, wantShadows);
-            } else if (hasActiveSpells) {
-                HandleSpellLogic(activeSpells, wantShadows);
-            } else if (hasActiveArmors) {
-                HandleEnchantedArmorLogic(activeArmors, wantShadows);
-            }
+        if (hasActiveTorch) {
+            HandleHeldLightsLogic(activeLight, wantShadows);
+        } else if (hasActiveSpells) {
+            HandleSpellLogic(activeSpells, wantShadows);
+        } else if (hasActiveArmors) {
+            HandleEnchantedArmorLogic(activeArmors, wantShadows, initialEquip);
         }
     }
 

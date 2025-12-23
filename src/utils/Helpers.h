@@ -5,4 +5,5 @@
 namespace ActorShadowLimiter {
     bool IsPlayer(RE::TESObjectREFR* ref);
     void CheckSanity();
+    void PrintPlayerNiNodeTree();
 }

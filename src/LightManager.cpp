@@ -176,13 +176,71 @@ namespace ActorShadowLimiter {
         }).detach();
     }
 
+    void ForceReequipArmor(RE::PlayerCharacter* player, RE::TESObjectARMO* armor) {
+        if (!player || !armor || g_isReequipping) {
+            return;
+        }
+
+        auto* equipManager = RE::ActorEquipManager::GetSingleton();
+        if (!equipManager) {
+            return;
+        }
+
+        g_isReequipping = true;
+        uint32_t armorFormId = armor->GetFormID();
+        auto* armorLight = GetLightFromEnchantedArmor(armor);
+
+        // Do entire sequence in one thread with delays between operations
+        std::thread([player, armor, armorLight, armorFormId, equipManager]() {
+            using namespace std::chrono_literals;
+            constexpr auto unequipWaitTime = 100ms;
+            constexpr auto enchantmentRespawnTime = 200ms;
+
+            // Unequip
+            if (auto* tasks = SKSE::GetTaskInterface()) {
+                tasks->AddTask([player, armor, equipManager]() {
+                    equipManager->UnequipObject(player, armor, nullptr, 1, nullptr, false, false, false, false,
+                                                nullptr);
+                });
+            }
+
+            // Wait for unequip to complete
+            std::this_thread::sleep_for(unequipWaitTime);
+
+            // Re-equip
+            if (auto* tasks = SKSE::GetTaskInterface()) {
+                tasks->AddTask([player, armor, equipManager]() {
+                    equipManager->EquipObject(player, armor, nullptr, 1, nullptr, false, false, false, false);
+                });
+            }
+
+            // Wait for enchantment to respawn
+            std::this_thread::sleep_for(enchantmentRespawnTime);
+
+            // Restore base form
+            if (auto* tasks = SKSE::GetTaskInterface()) {
+                tasks->AddTask([armorLight, armorFormId]() {
+                    if (armorLight && g_originalLightTypes.find(armorFormId) != g_originalLightTypes.end()) {
+                        uint32_t originalType = g_originalLightTypes[armorFormId];
+                        SetLightTypeNative(armorLight, originalType);
+                    }
+                    g_isReequipping = false;
+                });
+            } else {
+                g_isReequipping = false;
+            }
+        }).detach();
+    }
+
     namespace {
         // Recursively find all nodes with the given name, needed in cases that nodes are duplicated
         // e.g., multiple candlelight spells floating orb while re-casting
         void FindAllNodesByName(RE::NiAVObject* root, const std::string& name, std::vector<RE::NiAVObject*>& results) {
             if (!root) return;
 
-            if (root->name == name.c_str()) {
+            // Compare node name - handle both null and non-null names
+            const char* nodeName = root->name.c_str();
+            if (nodeName && std::string(nodeName) == name) {
                 results.push_back(root);
             }
 
@@ -201,7 +259,6 @@ namespace ActorShadowLimiter {
                                      float rotateX, float rotateY, float rotateZ, uint32_t formId,
                                      const char* itemType) {
             if (!player) return;
-
             if (rootNodeName.empty() || lightNodeName.empty()) return;
 
             int totalAdjusted = 0;
@@ -218,6 +275,13 @@ namespace ActorShadowLimiter {
 
                 // Find all root nodes with matching name (handles multiple nodes with same name, e.g., old + new)
                 std::vector<RE::NiAVObject*> rootNodes;
+
+                // Check if the model3D itself matches the root node name
+                if (model3D->name == rootNodeName.c_str()) {
+                    rootNodes.push_back(model3D);
+                }
+
+                // Also search within the tree
                 FindAllNodesByName(model3D, rootNodeName, rootNodes);
 
                 if (rootNodes.empty()) {
@@ -268,8 +332,6 @@ namespace ActorShadowLimiter {
     }
 
     void AdjustHeldLightPosition(RE::PlayerCharacter* player) {
-        if (!player) return;
-
         // Find the equipped light's config
         auto* lightBase = GetEquippedLight(player);
         if (!lightBase) return;
@@ -315,6 +377,27 @@ namespace ActorShadowLimiter {
         AdjustLightNodePosition(player, spellConfig->rootNodeName, spellConfig->lightNodeName, spellConfig->offsetX,
                                 spellConfig->offsetY, spellConfig->offsetZ, spellConfig->rotateX, spellConfig->rotateY,
                                 spellConfig->rotateZ, spellFormId, "spell");
+    }
+
+    void AdjustEnchantmentLightPosition(RE::PlayerCharacter* player, uint32_t armorFormId) {
+        if (!player) return;
+        const EnchantedArmorConfig* armorConfig = nullptr;
+
+        for (const auto& config : g_config.enchantedArmors) {
+            if (config.formId == armorFormId) {
+                armorConfig = &config;
+                break;
+            }
+        }
+
+        if (!armorConfig) {
+            DebugPrint("TRANSFORM", "No configuration found for enchanted armor 0x%08X", armorFormId);
+            return;
+        }
+
+        AdjustLightNodePosition(player, armorConfig->rootNodeName, armorConfig->lightNodeName, armorConfig->offsetX,
+                                armorConfig->offsetY, armorConfig->offsetZ, armorConfig->rotateX, armorConfig->rotateY,
+                                armorConfig->rotateZ, armorFormId, "armor");
     }
 
     // Scan for any configured spells currently active on the player
@@ -384,27 +467,49 @@ namespace ActorShadowLimiter {
 
     // Get the light from an enchanted armor's enchantment
     RE::TESObjectLIGH* GetLightFromEnchantedArmor(RE::TESObjectARMO* armor) {
-        if (!armor || !armor->formEnchanting) {
+        if (!armor) {
+            DebugPrint("ARMOR", "GetLightFromEnchantedArmor: armor is null");
+            return nullptr;
+        }
+
+        DebugPrint("ARMOR", "Checking armor 0x%08X for enchantment", armor->GetFormID());
+
+        if (!armor->formEnchanting) {
+            DebugPrint("ARMOR", "Armor 0x%08X has no formEnchanting", armor->GetFormID());
             return nullptr;
         }
 
         auto* enchantment = armor->formEnchanting;
-        if (!enchantment || enchantment->effects.size() == 0) {
+        DebugPrint("ARMOR", "Armor 0x%08X has enchantment 0x%08X with %zu effects", armor->GetFormID(),
+                   enchantment->GetFormID(), enchantment->effects.size());
+
+        if (enchantment->effects.size() == 0) {
             return nullptr;
         }
 
         // Find the light-associated effect
         for (auto* effect : enchantment->effects) {
             if (!effect || !effect->baseEffect) continue;
+
+            DebugPrint("ARMOR", "Checking effect with base effect 0x%08X", effect->baseEffect->GetFormID());
+
             auto* assocForm = effect->baseEffect->data.associatedForm;
-            if (!assocForm) continue;
+            if (!assocForm) {
+                DebugPrint("ARMOR", "Effect has no associated form");
+                continue;
+            }
+
+            DebugPrint("ARMOR", "Associated form 0x%08X, type: %d", assocForm->GetFormID(),
+                       (int)assocForm->GetFormType());
 
             auto* light = assocForm->As<RE::TESObjectLIGH>();
             if (light) {
+                DebugPrint("ARMOR", "Found light 0x%08X in armor enchantment", light->GetFormID());
                 return light;
             }
         }
 
+        DebugPrint("ARMOR", "No light found in armor 0x%08X enchantment", armor->GetFormID());
         return nullptr;
     }
 
