@@ -239,12 +239,30 @@ namespace ActorShadowLimiter {
             return;
         }
 
-        if (hasActiveTorch) {
-            HandleHeldLightsLogic(activeLight, wantShadows);
-        } else if (hasActiveSpells) {
-            HandleSpellLogic(activeSpells, wantShadows);
-        } else if (hasActiveArmors) {
-            HandleEnchantedArmorLogic(activeArmors, wantShadows, initialEquip);
+        // Check which type currently has shadows enabled
+        bool torchHasShadows = hasActiveTorch && g_lastShadowStates[activeLight.value()];
+        bool spellHasShadows = hasActiveSpells && std::any_of(activeSpells.begin(), activeSpells.end(),
+                                                              [](uint32_t id) { return g_lastShadowStates[id]; });
+        bool armorHasShadows = hasActiveArmors && std::any_of(activeArmors.begin(), activeArmors.end(),
+                                                              [](uint32_t id) { return g_lastShadowStates[id]; });
+
+        bool anyShadowsEnabled = torchHasShadows || spellHasShadows || armorHasShadows;
+
+        // If shadows are enabled, only handle that type. Otherwise handle all active types.
+        if (!anyShadowsEnabled || armorHasShadows) {
+            if (hasActiveArmors) {
+                HandleEnchantedArmorLogic(activeArmors, wantShadows, initialEquip);
+            }
+        }
+        if (!anyShadowsEnabled || torchHasShadows) {
+            if (hasActiveTorch) {
+                HandleHeldLightsLogic(activeLight, wantShadows);
+            }
+        }
+        if (!anyShadowsEnabled || spellHasShadows) {
+            if (hasActiveSpells) {
+                HandleSpellLogic(activeSpells, wantShadows);
+            }
         }
     }
 
