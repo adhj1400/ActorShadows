@@ -1,0 +1,13 @@
+{
+  "type": "EnchantmentLight",
+  "formId": "0x002301",
+  "plugin": "QwibNewLanterns.esp",
+  "rootNodeName": "WaterBreathingTargetFX",
+  "lightNodeName": "AttachLight",
+  "offsetX": 0.0,
+  "offsetY": 20.0,
+  "offsetZ": 0.0,
+  "rotateX": 0.0,
+  "rotateY": 0.0,
+  "rotateZ": 90.0
+}

@@ -127,6 +127,46 @@ namespace ActorShadowLimiter {
         }
     }
 
+    void ResetActiveEnchantedArmorsToNoShadow(RE::PlayerCharacter* player) {
+        if (!player) {
+            return;
+        }
+
+        // Get active configured enchanted armors
+        auto activeArmors = GetActiveConfiguredEnchantedArmors(player);
+        if (activeArmors.empty()) {
+            return;
+        }
+
+        // For each active configured enchanted armor, reset its light to no-shadow
+        for (uint32_t armorFormId : activeArmors) {
+            auto* armor = RE::TESForm::LookupByID<RE::TESObjectARMO>(armorFormId);
+            if (!armor) {
+                continue;
+            }
+
+            auto* armorLight = GetLightFromEnchantedArmor(armor);
+            if (!armorLight) {
+                continue;
+            }
+
+            // Store original type if not already stored
+            uint8_t currentLightType = static_cast<uint8_t>(GetLightType(armorLight));
+            if (g_originalLightTypes.find(armorFormId) == g_originalLightTypes.end()) {
+                g_originalLightTypes[armorFormId] = currentLightType;
+            }
+
+            // Set to no-shadow variant
+            uint8_t noShadowType = static_cast<uint8_t>(LightType::OmniNS);
+            if (currentLightType != noShadowType) {
+                SetLightTypeNative(armorLight, noShadowType);
+            }
+
+            // Update last known state
+            g_lastShadowStates[armorFormId] = false;
+        }
+    }
+
     void ForceReequipLight(RE::PlayerCharacter* player) {
         if (g_isReequipping) {
             return;

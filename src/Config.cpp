@@ -1,5 +1,6 @@
 #include "Config.h"
 
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 
@@ -72,143 +73,138 @@ namespace ActorShadowLimiter {
     }
 
     static void LoadJsonConfig() {
-        std::string jsonPath = "Data/SKSE/Plugins/ActorShadows.json";
-        std::string json = ReadFileText(jsonPath);
-        if (json.empty()) return;
+        std::string configDir = "Data/SKSE/Plugins/ActorShadows";
 
-        // Parse handHeldLights array
-        size_t hlStart = json.find("\"handHeldLights\"");
-        if (hlStart != std::string::npos) {
-            size_t arrayStart = json.find('[', hlStart);
-            size_t arrayEnd = json.find(']', arrayStart);
-            if (arrayStart != std::string::npos && arrayEnd != std::string::npos) {
-                size_t objStart = arrayStart;
-                while ((objStart = json.find('{', objStart)) != std::string::npos && objStart < arrayEnd) {
-                    size_t objEnd = json.find('}', objStart);
-                    if (objEnd == std::string::npos || objEnd > arrayEnd) break;
-
-                    HandHeldLightConfig light;
-                    std::string formIdStr = ExtractValue(json, "formId", objStart);
-                    if (!formIdStr.empty()) {
-                        light.formId = std::stoul(formIdStr, nullptr, 0);
-                    }
-                    light.plugin = ExtractValue(json, "plugin", objStart);
-                    light.rootNodeName = ExtractValue(json, "rootNodeName", objStart);
-                    light.lightNodeName = ExtractValue(json, "lightNodeName", objStart);
-
-                    std::string offsetX = ExtractValue(json, "offsetX", objStart);
-                    if (!offsetX.empty()) light.offsetX = std::stof(offsetX);
-
-                    std::string offsetY = ExtractValue(json, "offsetY", objStart);
-                    if (!offsetY.empty()) light.offsetY = std::stof(offsetY);
-
-                    std::string offsetZ = ExtractValue(json, "offsetZ", objStart);
-                    if (!offsetZ.empty()) light.offsetZ = std::stof(offsetZ);
-
-                    std::string rotateX = ExtractValue(json, "rotateX", objStart);
-                    if (!rotateX.empty()) light.rotateX = std::stof(rotateX);
-
-                    std::string rotateY = ExtractValue(json, "rotateY", objStart);
-                    if (!rotateY.empty()) light.rotateY = std::stof(rotateY);
-
-                    std::string rotateZ = ExtractValue(json, "rotateZ", objStart);
-                    if (!rotateZ.empty()) light.rotateZ = std::stof(rotateZ);
-
-                    g_config.handHeldLights.push_back(light);
-                    objStart = objEnd + 1;
-                }
-            }
+        // Check if directory exists
+        if (!std::filesystem::exists(configDir)) {
+            DebugPrint("CONFIG", "ActorShadows config directory not found: %s", configDir.c_str());
+            return;
         }
 
-        // Parse spells array
-        size_t spellStart = json.find("\"spells\"");
-        if (spellStart != std::string::npos) {
-            size_t arrayStart = json.find('[', spellStart);
-            size_t arrayEnd = json.find(']', arrayStart);
-            if (arrayStart != std::string::npos && arrayEnd != std::string::npos) {
-                size_t objStart = arrayStart;
-                while ((objStart = json.find('{', objStart)) != std::string::npos && objStart < arrayEnd) {
-                    size_t objEnd = json.find('}', objStart);
-                    if (objEnd == std::string::npos || objEnd > arrayEnd) break;
+        int fileCount = 0;
 
-                    SpellConfig spell;
-                    std::string formIdStr = ExtractValue(json, "formId", objStart);
-                    if (!formIdStr.empty()) {
-                        spell.formId = std::stoul(formIdStr, nullptr, 0);
-                    }
-                    spell.plugin = ExtractValue(json, "plugin", objStart);
-                    spell.rootNodeName = ExtractValue(json, "rootNodeName", objStart);
-                    spell.lightNodeName = ExtractValue(json, "lightNodeName", objStart);
+        // Iterate through all .json files in the directory
+        for (const auto& entry : std::filesystem::directory_iterator(configDir)) {
+            if (!entry.is_regular_file()) continue;
+            if (entry.path().extension() != ".json") continue;
 
-                    std::string offsetX = ExtractValue(json, "offsetX", objStart);
-                    if (!offsetX.empty()) spell.offsetX = std::stof(offsetX);
-
-                    std::string offsetY = ExtractValue(json, "offsetY", objStart);
-                    if (!offsetY.empty()) spell.offsetY = std::stof(offsetY);
-
-                    std::string offsetZ = ExtractValue(json, "offsetZ", objStart);
-                    if (!offsetZ.empty()) spell.offsetZ = std::stof(offsetZ);
-
-                    std::string rotateX = ExtractValue(json, "rotateX", objStart);
-                    if (!rotateX.empty()) spell.rotateX = std::stof(rotateX);
-
-                    std::string rotateY = ExtractValue(json, "rotateY", objStart);
-                    if (!rotateY.empty()) spell.rotateY = std::stof(rotateY);
-
-                    std::string rotateZ = ExtractValue(json, "rotateZ", objStart);
-                    if (!rotateZ.empty()) spell.rotateZ = std::stof(rotateZ);
-
-                    g_config.spells.push_back(spell);
-                    objStart = objEnd + 1;
-                }
+            std::string filePath = entry.path().string();
+            std::string json = ReadFileText(filePath);
+            if (json.empty()) {
+                DebugPrint("CONFIG", "Warning: Could not read file %s", filePath.c_str());
+                continue;
             }
+
+            // Extract type field to determine what kind of config this is
+            std::string type = ExtractValue(json, "type", 0);
+            if (type.empty()) {
+                DebugPrint("CONFIG", "Warning: File %s missing 'type' field", filePath.c_str());
+                continue;
+            }
+
+            if (type == "HandheldLight") {
+                HandHeldLightConfig light;
+                std::string formIdStr = ExtractValue(json, "formId", 0);
+                if (!formIdStr.empty()) {
+                    light.formId = std::stoul(formIdStr, nullptr, 0);
+                }
+                light.plugin = ExtractValue(json, "plugin", 0);
+                light.rootNodeName = ExtractValue(json, "rootNodeName", 0);
+                light.lightNodeName = ExtractValue(json, "lightNodeName", 0);
+
+                std::string offsetX = ExtractValue(json, "offsetX", 0);
+                if (!offsetX.empty()) light.offsetX = std::stof(offsetX);
+
+                std::string offsetY = ExtractValue(json, "offsetY", 0);
+                if (!offsetY.empty()) light.offsetY = std::stof(offsetY);
+
+                std::string offsetZ = ExtractValue(json, "offsetZ", 0);
+                if (!offsetZ.empty()) light.offsetZ = std::stof(offsetZ);
+
+                std::string rotateX = ExtractValue(json, "rotateX", 0);
+                if (!rotateX.empty()) light.rotateX = std::stof(rotateX);
+
+                std::string rotateY = ExtractValue(json, "rotateY", 0);
+                if (!rotateY.empty()) light.rotateY = std::stof(rotateY);
+
+                std::string rotateZ = ExtractValue(json, "rotateZ", 0);
+                if (!rotateZ.empty()) light.rotateZ = std::stof(rotateZ);
+
+                g_config.handHeldLights.push_back(light);
+                DebugPrint("CONFIG", "Loaded HandheldLight from %s", entry.path().filename().string().c_str());
+
+            } else if (type == "SpellLight") {
+                SpellConfig spell;
+                std::string formIdStr = ExtractValue(json, "formId", 0);
+                if (!formIdStr.empty()) {
+                    spell.formId = std::stoul(formIdStr, nullptr, 0);
+                }
+                spell.plugin = ExtractValue(json, "plugin", 0);
+                spell.rootNodeName = ExtractValue(json, "rootNodeName", 0);
+                spell.lightNodeName = ExtractValue(json, "lightNodeName", 0);
+
+                std::string offsetX = ExtractValue(json, "offsetX", 0);
+                if (!offsetX.empty()) spell.offsetX = std::stof(offsetX);
+
+                std::string offsetY = ExtractValue(json, "offsetY", 0);
+                if (!offsetY.empty()) spell.offsetY = std::stof(offsetY);
+
+                std::string offsetZ = ExtractValue(json, "offsetZ", 0);
+                if (!offsetZ.empty()) spell.offsetZ = std::stof(offsetZ);
+
+                std::string rotateX = ExtractValue(json, "rotateX", 0);
+                if (!rotateX.empty()) spell.rotateX = std::stof(rotateX);
+
+                std::string rotateY = ExtractValue(json, "rotateY", 0);
+                if (!rotateY.empty()) spell.rotateY = std::stof(rotateY);
+
+                std::string rotateZ = ExtractValue(json, "rotateZ", 0);
+                if (!rotateZ.empty()) spell.rotateZ = std::stof(rotateZ);
+
+                g_config.spells.push_back(spell);
+                DebugPrint("CONFIG", "Loaded SpellLight from %s", entry.path().filename().string().c_str());
+
+            } else if (type == "EnchantmentLight") {
+                EnchantedArmorConfig armor;
+                std::string formIdStr = ExtractValue(json, "formId", 0);
+                if (!formIdStr.empty()) {
+                    armor.formId = std::stoul(formIdStr, nullptr, 0);
+                }
+                armor.plugin = ExtractValue(json, "plugin", 0);
+                armor.rootNodeName = ExtractValue(json, "rootNodeName", 0);
+                armor.lightNodeName = ExtractValue(json, "lightNodeName", 0);
+
+                std::string offsetX = ExtractValue(json, "offsetX", 0);
+                if (!offsetX.empty()) armor.offsetX = std::stof(offsetX);
+
+                std::string offsetY = ExtractValue(json, "offsetY", 0);
+                if (!offsetY.empty()) armor.offsetY = std::stof(offsetY);
+
+                std::string offsetZ = ExtractValue(json, "offsetZ", 0);
+                if (!offsetZ.empty()) armor.offsetZ = std::stof(offsetZ);
+
+                std::string rotateX = ExtractValue(json, "rotateX", 0);
+                if (!rotateX.empty()) armor.rotateX = std::stof(rotateX);
+
+                std::string rotateY = ExtractValue(json, "rotateY", 0);
+                if (!rotateY.empty()) armor.rotateY = std::stof(rotateY);
+
+                std::string rotateZ = ExtractValue(json, "rotateZ", 0);
+                if (!rotateZ.empty()) armor.rotateZ = std::stof(rotateZ);
+
+                g_config.enchantedArmors.push_back(armor);
+                DebugPrint("CONFIG", "Loaded EnchantmentLight from %s", entry.path().filename().string().c_str());
+
+            } else {
+                DebugPrint("CONFIG", "Warning: Unknown type '%s' in file %s", type.c_str(), filePath.c_str());
+                continue;
+            }
+
+            fileCount++;
         }
 
-        // Parse enchantedArmors array
-        size_t armorStart = json.find("\"enchantedArmors\"");
-        if (armorStart != std::string::npos) {
-            size_t arrayStart = json.find('[', armorStart);
-            size_t arrayEnd = json.find(']', arrayStart);
-            if (arrayStart != std::string::npos && arrayEnd != std::string::npos) {
-                size_t objStart = arrayStart;
-                while ((objStart = json.find('{', objStart)) != std::string::npos && objStart < arrayEnd) {
-                    size_t objEnd = json.find('}', objStart);
-                    if (objEnd == std::string::npos || objEnd > arrayEnd) break;
-
-                    EnchantedArmorConfig armor;
-                    std::string formIdStr = ExtractValue(json, "formId", objStart);
-                    if (!formIdStr.empty()) {
-                        armor.formId = std::stoul(formIdStr, nullptr, 0);
-                    }
-                    armor.plugin = ExtractValue(json, "plugin", objStart);
-                    armor.rootNodeName = ExtractValue(json, "rootNodeName", objStart);
-                    armor.lightNodeName = ExtractValue(json, "lightNodeName", objStart);
-
-                    std::string offsetX = ExtractValue(json, "offsetX", objStart);
-                    if (!offsetX.empty()) armor.offsetX = std::stof(offsetX);
-
-                    std::string offsetY = ExtractValue(json, "offsetY", objStart);
-                    if (!offsetY.empty()) armor.offsetY = std::stof(offsetY);
-
-                    std::string offsetZ = ExtractValue(json, "offsetZ", objStart);
-                    if (!offsetZ.empty()) armor.offsetZ = std::stof(offsetZ);
-
-                    std::string rotateX = ExtractValue(json, "rotateX", objStart);
-                    if (!rotateX.empty()) armor.rotateX = std::stof(rotateX);
-
-                    std::string rotateY = ExtractValue(json, "rotateY", objStart);
-                    if (!rotateY.empty()) armor.rotateY = std::stof(rotateY);
-
-                    std::string rotateZ = ExtractValue(json, "rotateZ", objStart);
-                    if (!rotateZ.empty()) armor.rotateZ = std::stof(rotateZ);
-
-                    g_config.enchantedArmors.push_back(armor);
-                    objStart = objEnd + 1;
-                }
-            }
-        }
-
-        DebugPrint("CONFIG", "Loaded %zu hand-held lights, %zu spells, and %zu enchanted armors from ActorShadows.json",
+        DebugPrint("CONFIG", "Loaded %d light configuration files", fileCount);
+        DebugPrint("CONFIG", "Total: %zu hand-held lights, %zu spells, %zu enchanted armors",
                    g_config.handHeldLights.size(), g_config.spells.size(), g_config.enchantedArmors.size());
     }
 

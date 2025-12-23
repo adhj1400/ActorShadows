@@ -6,6 +6,7 @@ namespace ActorShadowLimiter {
     RE::TESObjectLIGH* GetEquippedLight(RE::PlayerCharacter* player);
     void ResetEquippedLightToNoShadow(RE::PlayerCharacter* player);
     void ResetActiveSpellsToNoShadow(RE::PlayerCharacter* player);
+    void ResetActiveEnchantedArmorsToNoShadow(RE::PlayerCharacter* player);
     void ForceReequipLight(RE::PlayerCharacter* player);
     void ForceReequipArmor(RE::PlayerCharacter* player, RE::TESObjectARMO* armor);
     void AdjustHeldLightPosition(RE::PlayerCharacter* player);

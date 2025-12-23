@@ -33,13 +33,16 @@ namespace ActorShadowLimiter {
 
         auto activeLight = GetActiveConfiguredLight(player);
         auto activeSpells = GetActiveConfiguredSpells(player);
+        auto activeEnchantments = GetActiveConfiguredEnchantedArmors(player);
 
-        if (!activeLight.has_value() && activeSpells.empty()) {
+        if (!activeLight.has_value() && activeSpells.empty() && activeEnchantments.empty()) {
             return RE::BSEventNotifyControl::kContinue;
         }
 
         ResetEquippedLightToNoShadow(player);
         ResetActiveSpellsToNoShadow(player);
+        ResetActiveEnchantedArmorsToNoShadow(player);
+
         EnablePolling();
 
         return RE::BSEventNotifyControl::kContinue;

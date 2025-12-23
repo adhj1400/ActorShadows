@@ -1,0 +1,13 @@
+{
+  "type": "HandheldLight",
+  "formId": "0x01D4EC",
+  "plugin": "Skyrim.esm",
+  "rootNodeName": "TorchFire",
+  "lightNodeName": "AttachLight",
+  "offsetX": 2.0,
+  "offsetY": 30.0,
+  "offsetZ": -2.0,
+  "rotateX": -20.0,
+  "rotateY": 0.0,
+  "rotateZ": 0.0
+}
