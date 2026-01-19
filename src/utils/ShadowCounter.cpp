@@ -82,11 +82,11 @@ namespace ActorShadowLimiter {
                         // Get light properties that LightPlacer might be modifying
                         int32_t radius = lightBaseObj->data.radius;
 
-                        // Check for ExtraRadius override (XRDS)
+                        // Check for ExtraRadius modifier (XRDS) - this is an offset, not a replacement
                         int32_t actualRadius = radius;
                         auto* extraRadius = ref->extraList.GetByType<RE::ExtraRadius>();
                         if (extraRadius) {
-                            actualRadius = static_cast<int32_t>(extraRadius->radius);
+                            actualRadius = radius + static_cast<int32_t>(extraRadius->radius);
                         }
 
                         // Check if the light is actually rendering by examining the NiLight node
@@ -107,9 +107,10 @@ namespace ActorShadowLimiter {
                         DebugPrint("SCAN",
                                    "Base: 0x%08X, Ref: 0x%08X, Radius: %d, "
                                    "ShadowDist: %.1f, EffectiveDist: %.1f, "
-                                   "Disabled: %s, HasLight: %s",
+                                   "Disabled: %s, HasLight: %s, HasShadows: %s",
                                    lightBaseObj->GetFormID(), ref->GetFormID(), actualRadius, shadowDistance,
-                                   effectiveShadowDistance, isDisabled ? "YES" : "NO", hasLightAttached ? "YES" : "NO");
+                                   effectiveShadowDistance, isDisabled ? "YES" : "NO", hasLightAttached ? "YES" : "NO",
+                                   isShadowLight ? "YES" : "NO");
 
                         // Only count lights within effective shadow distance and actually emitting
                         // LightPlacer removes lights by not attaching ExtraLight data
