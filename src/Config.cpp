@@ -303,6 +303,12 @@ namespace ActorShadowLimiter {
                 } catch (...) {
                     // Keep default
                 }
+            } else if (key == "ShadowDistanceSafetyMargin") {
+                try {
+                    g_config.shadowDistanceSafetyMargin = std::stof(value);
+                } catch (...) {
+                    // Keep default
+                }
             }
         }
 

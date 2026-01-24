@@ -75,7 +75,6 @@ namespace ActorShadowLimiter {
                         float distance = std::sqrt(distSq);
                         bool isDisabled = ref->IsDisabled();
                         bool isDeleted = ref->IsDeleted();
-                        bool isInitiallyDisabled = ref->GetFormFlags() & 0x800;  // Initially disabled flag
                         bool hasLightAttached =
                             ref->extraList.HasType(RE::ExtraDataType::kLight);  // Required by LightPlacer
 
@@ -100,8 +99,9 @@ namespace ActorShadowLimiter {
                             }
                         }
 
-                        // Effective shadow distance: light radius + game's shadow distance setting
-                        float effectiveShadowDistance = actualRadius + shadowDistance;
+                        // Effective shadow distance: light radius + game's shadow distance setting + config modifier
+                        float effectiveShadowDistance =
+                            actualRadius + shadowDistance + g_config.shadowDistanceSafetyMargin;
                         bool withinEffectiveShadowDist = distance <= effectiveShadowDistance;
 
                         DebugPrint("SCAN",
@@ -114,8 +114,7 @@ namespace ActorShadowLimiter {
 
                         // Only count lights within effective shadow distance and actually emitting
                         // LightPlacer removes lights by not attaching ExtraLight data
-                        if (!isDisabled && !isDeleted && !isInitiallyDisabled && hasLightAttached && actualRadius > 0 &&
-                            isRendering && withinEffectiveShadowDist) {
+                        if (!isDisabled && !isDeleted && hasLightAttached && isRendering && withinEffectiveShadowDist) {
                             ++shadowLightCount;
                         }
                     }
