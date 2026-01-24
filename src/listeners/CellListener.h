@@ -10,6 +10,9 @@ namespace ActorShadowLimiter {
 
         RE::BSEventNotifyControl ProcessEvent(const RE::TESCellFullyLoadedEvent* event,
                                               RE::BSTEventSource<RE::TESCellFullyLoadedEvent>* source) override;
+
+    private:
+        bool wasExterior = false;
     };
 
 }

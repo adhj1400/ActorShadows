@@ -39,10 +39,16 @@ namespace ActorShadowLimiter {
             return RE::BSEventNotifyControl::kContinue;
         }
 
-        ResetEquippedLightToNoShadow(player);
-        ResetActiveSpellsToNoShadow(player);
-        ResetActiveEnchantedArmorsToNoShadow(player);
+        auto* cell = player->GetParentCell();
+        bool isExterior = cell && cell->IsExteriorCell();
 
+        if (cell && (!wasExterior || !isExterior)) {
+            ResetEquippedLightToNoShadow(player);
+            ResetActiveSpellsToNoShadow(player);
+            ResetActiveEnchantedArmorsToNoShadow(player);
+        }
+
+        wasExterior = isExterior;
         EnablePolling();
 
         return RE::BSEventNotifyControl::kContinue;

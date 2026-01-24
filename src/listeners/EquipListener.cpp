@@ -35,6 +35,9 @@ namespace ActorShadowLimiter {
             return RE::BSEventNotifyControl::kContinue;
         }
 
+        DebugPrint("EQUIP_DEBUG", "TESEquipEvent fired - equipped: %d, baseObject: 0x%08X", event->equipped,
+                   event->baseObject);
+
         if (!event->equipped) {
             return RE::BSEventNotifyControl::kContinue;
         }
