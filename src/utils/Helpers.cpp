@@ -34,6 +34,10 @@ namespace ActorShadowLimiter {
         return IsPlayer(event->object.get());
     }
 
+    bool IsHandheldLight(RE::TESForm* form) { return form && form->GetFormType() == RE::FormType::Light; }
+
+    bool IsLightEmittingArmor(RE::TESForm* form) { return form && form->GetFormType() == RE::FormType::Armor; }
+
     void WarnIfLightsHaveShadows() {
         bool foundShadows = false;
 

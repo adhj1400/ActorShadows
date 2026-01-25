@@ -98,13 +98,15 @@ namespace ActorShadowLimiter {
         uint32_t lightFormId = activeLight.value();
         auto* player = RE::PlayerCharacter::GetSingleton();
         auto* lightBase = GetEquippedLight(player);
-        bool lastState = g_lastShadowStates[lightFormId];
 
         if (!lightBase) {
             return;
         }
 
-        if (wantShadows != lastState) {
+        bool currentlyHasShadows = g_lastShadowStates[lightFormId];
+        bool shadowStateChanged = (wantShadows != currentlyHasShadows);
+
+        if (shadowStateChanged) {
             uint8_t newType =
                 wantShadows ? static_cast<uint8_t>(LightType::OmniShadow) : static_cast<uint8_t>(LightType::OmniNS);
             SetLightTypeNative(lightBase, newType);

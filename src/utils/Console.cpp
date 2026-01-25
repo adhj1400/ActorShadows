@@ -31,7 +31,7 @@ namespace ActorShadowLimiter {
         vsnprintf(buffer, sizeof(buffer), format, args);
         va_end(args);
 
-        SKSE::log::info("[ActorShadows {}] {}", action, buffer);
+        SKSE::log::info("[ActorShadows | {}] {}", action, buffer);
     }
 
     void PrintPlayerNiNodeTree() {

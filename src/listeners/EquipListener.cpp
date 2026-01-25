@@ -24,9 +24,25 @@ namespace ActorShadowLimiter {
         }
     }
 
+    void HandleHandheldLightEquip(RE::TESObjectLIGH* lightBase) {
+        uint32_t lightFormId = lightBase->GetFormID();
+
+        if (HasShadows(lightBase)) {
+            g_lastShadowStates[lightFormId] = true;
+            return;
+        }
+
+        g_lastShadowStates[lightFormId] = false;
+        DebugPrint("EQUIP", "Configured hand-held light 0x%08X equipped. Starting tracking.", lightFormId);
+    }
+
     RE::BSEventNotifyControl EquipListener::ProcessEvent(const RE::TESEquipEvent* event,
                                                          RE::BSTEventSource<RE::TESEquipEvent>*) {
         if (!IsPlayerEquipEvent(event) || !event->equipped) {
+            return RE::BSEventNotifyControl::kContinue;
+        }
+
+        if (g_isReequipping) {
             return RE::BSEventNotifyControl::kContinue;
         }
 
@@ -35,44 +51,23 @@ namespace ActorShadowLimiter {
             return RE::BSEventNotifyControl::kContinue;
         }
 
-        // Handle hand-held lights
-        if (form->GetFormType() == RE::FormType::Light) {
+        if (IsHandheldLight(form)) {
             auto* lightBase = form->As<RE::TESObjectLIGH>();
             if (!lightBase || !IsInConfig(lightBase)) {
                 return RE::BSEventNotifyControl::kContinue;
             }
 
-            uint32_t lightFormId = lightBase->GetFormID();
-
-            if (HasShadows(lightBase)) {
-                SetLightTypeNative(lightBase, static_cast<uint8_t>(LightType::OmniNS));
-
-                auto* player = RE::PlayerCharacter::GetSingleton();
-
-                if (player) {
-                    AdjustHeldLightPosition(player);
-                }
-                g_lastShadowStates[lightFormId] = true;
-
-                return RE::BSEventNotifyControl::kContinue;
-            } else {
-                g_lastShadowStates[lightFormId] = false;
-                UpdatePlayerLightShadows();
-            }
-
-            DebugPrint("EQUIP", "Configured hand-held light 0x%08X equipped. Starting tracking.", lightFormId);
+            HandleHandheldLightEquip(lightBase);
 
             EnablePolling();
-
-            return RE::BSEventNotifyControl::kContinue;
-        }
-
-        // Handle enchanted armors
-        if (form->GetFormType() == RE::FormType::Armor) {
+            UpdatePlayerLightShadows();
+        } else if (IsLightEmittingArmor(form)) {
             auto* armorBase = form->As<RE::TESObjectARMO>();
             if (!armorBase || !IsInConfig(armorBase)) {
                 return RE::BSEventNotifyControl::kContinue;
             }
+
+            DebugPrint("EQUIP", "Configured armor light 0x%08X equipped. Starting tracking.", armorBase->GetFormID());
 
             EnablePolling();
             UpdatePlayerLightShadows(true);

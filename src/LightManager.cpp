@@ -173,13 +173,14 @@ namespace ActorShadowLimiter {
         equipManager->EquipObject(player, torchBase, nullptr, 1, slot, true, false, false, false);
 
         // Restore base form after a delay so the reference keeps shadows but base form doesn't
-        std::thread([torchBase, lightFormId]() {
+        std::thread([torchBase, lightFormId, player]() {
             using namespace std::chrono_literals;
-            std::this_thread::sleep_for(500ms);  // Longer delay to ensure reference is fully created with shadows
+            std::this_thread::sleep_for(1000ms);  // Longer delay to ensure reference is fully created with shadows
 
             if (auto* tasks = SKSE::GetTaskInterface()) {
-                tasks->AddTask([torchBase, lightFormId]() {
+                tasks->AddTask([torchBase, lightFormId, player]() {
                     SetLightTypeNative(torchBase, static_cast<uint8_t>(LightType::OmniNS));
+                    AdjustHeldLightPosition(player);
                     DebugPrint("EQUIP", "Restored base form to OmniNS");
                     g_isReequipping = false;
                 });
