@@ -59,17 +59,9 @@ namespace ActorShadowLimiter {
             return;
         }
 
-        // Get current light type and store as original if not already stored
-        uint8_t currentLightType = static_cast<uint8_t>(GetLightType(lightBase));
-        if (g_originalLightTypes.find(lightFormId) == g_originalLightTypes.end()) {
-            g_originalLightTypes[lightFormId] = currentLightType;
-        }
-
         // Set to no-shadow variant
         uint8_t noShadowType = static_cast<uint8_t>(LightType::OmniNS);
-        if (currentLightType != noShadowType) {
-            SetLightTypeNative(lightBase, noShadowType);
-        }
+        SetLightTypeNative(lightBase, noShadowType);
 
         // Update last known state
         g_lastShadowStates[lightFormId] = false;
@@ -110,17 +102,9 @@ namespace ActorShadowLimiter {
                 continue;
             }
 
-            // Store original type if not already stored
-            uint8_t currentLightType = static_cast<uint8_t>(GetLightType(lightBase));
-            if (g_originalLightTypes.find(spellFormId) == g_originalLightTypes.end()) {
-                g_originalLightTypes[spellFormId] = currentLightType;
-            }
-
             // Set to no-shadow variant
             uint8_t noShadowType = static_cast<uint8_t>(LightType::OmniNS);
-            if (currentLightType != noShadowType) {
-                SetLightTypeNative(lightBase, noShadowType);
-            }
+            SetLightTypeNative(lightBase, noShadowType);
 
             // Update last known state
             g_lastShadowStates[spellFormId] = false;
@@ -150,17 +134,9 @@ namespace ActorShadowLimiter {
                 continue;
             }
 
-            // Store original type if not already stored
-            uint8_t currentLightType = static_cast<uint8_t>(GetLightType(armorLight));
-            if (g_originalLightTypes.find(armorFormId) == g_originalLightTypes.end()) {
-                g_originalLightTypes[armorFormId] = currentLightType;
-            }
-
             // Set to no-shadow variant
             uint8_t noShadowType = static_cast<uint8_t>(LightType::OmniNS);
-            if (currentLightType != noShadowType) {
-                SetLightTypeNative(armorLight, noShadowType);
-            }
+            SetLightTypeNative(armorLight, noShadowType);
 
             // Update last known state
             g_lastShadowStates[armorFormId] = false;
@@ -203,11 +179,8 @@ namespace ActorShadowLimiter {
 
             if (auto* tasks = SKSE::GetTaskInterface()) {
                 tasks->AddTask([torchBase, lightFormId]() {
-                    if (g_originalLightTypes.find(lightFormId) != g_originalLightTypes.end()) {
-                        SetLightTypeNative(torchBase, g_originalLightTypes[lightFormId]);
-                        DebugPrint("EQUIP", "Restored base form to original type: %u",
-                                   g_originalLightTypes[lightFormId]);
-                    }
+                    SetLightTypeNative(torchBase, static_cast<uint8_t>(LightType::OmniNS));
+                    DebugPrint("EQUIP", "Restored base form to OmniNS");
                     g_isReequipping = false;
                 });
             } else {
@@ -260,9 +233,8 @@ namespace ActorShadowLimiter {
             // Restore base form
             if (auto* tasks = SKSE::GetTaskInterface()) {
                 tasks->AddTask([armorLight, armorFormId]() {
-                    if (armorLight && g_originalLightTypes.find(armorFormId) != g_originalLightTypes.end()) {
-                        uint32_t originalType = g_originalLightTypes[armorFormId];
-                        SetLightTypeNative(armorLight, originalType);
+                    if (armorLight) {
+                        SetLightTypeNative(armorLight, static_cast<uint8_t>(LightType::OmniNS));
                     }
                     g_isReequipping = false;
                 });

@@ -1,5 +1,3 @@
-#include <spdlog/sinks/basic_file_sink.h>
-
 #include "Config.h"
 #include "Globals.h"
 #include "SKSE/SKSE.h"
@@ -15,28 +13,28 @@ using namespace ActorShadowLimiter;
 
 namespace {
     void InitializeLog() {
-        auto path = SKSE::log::log_directory();
+        auto path = logger::log_directory();
         if (!path) {
             return;
         }
 
-        *path /= "ActorShadows.log";
+        *path /= "ActorShadows.log"sv;
         auto sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(path->string(), true);
 
-        auto log = std::make_shared<spdlog::logger>("global log", std::move(sink));
+        auto log = std::make_shared<spdlog::logger>("global log"s, std::move(sink));
         log->set_level(spdlog::level::info);
         log->flush_on(spdlog::level::info);
 
         spdlog::set_default_logger(std::move(log));
-        spdlog::set_pattern("%g(%#): [%l] %v");
+        spdlog::set_pattern("%g(%#): [%l] %v"s);
     }
 }
 
 SKSEPluginLoad(const SKSE::LoadInterface* skse) {
     InitializeLog();
-    SKSE::log::info("ActorShadows loaded");
-
     SKSE::Init(skse);
+
+    SKSE::log::info("ActorShadows loaded");
 
     SKSE::GetMessagingInterface()->RegisterListener([](SKSE::MessagingInterface::Message* message) {
         if (message->type == SKSE::MessagingInterface::kDataLoaded) {

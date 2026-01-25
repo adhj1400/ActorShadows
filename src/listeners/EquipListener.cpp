@@ -35,9 +35,6 @@ namespace ActorShadowLimiter {
             return RE::BSEventNotifyControl::kContinue;
         }
 
-        DebugPrint("EQUIP_DEBUG", "TESEquipEvent fired - equipped: %d, baseObject: 0x%08X", event->equipped,
-                   event->baseObject);
-
         if (!event->equipped) {
             return RE::BSEventNotifyControl::kContinue;
         }
@@ -57,10 +54,7 @@ namespace ActorShadowLimiter {
             uint32_t lightFormId = lightBase->GetFormID();
 
             if (HasShadows(lightBase)) {
-                // Restore base form to original type
-                if (g_originalLightTypes.find(lightFormId) != g_originalLightTypes.end()) {
-                    SetLightTypeNative(lightBase, g_originalLightTypes[lightFormId]);
-                }
+                SetLightTypeNative(lightBase, static_cast<uint8_t>(LightType::OmniNS));
 
                 auto* player = RE::PlayerCharacter::GetSingleton();
 

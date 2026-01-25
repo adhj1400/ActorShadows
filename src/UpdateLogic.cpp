@@ -49,14 +49,6 @@ namespace ActorShadowLimiter {
                     DebugPrint("UPDATE", "Spell 0x%08X shadow state changed: %s", spellFormId,
                                wantShadows ? "ENABLE" : "DISABLE");
 
-                    // Get current light type to remember original
-                    uint8_t currentLightType = static_cast<uint8_t>(GetLightType(spellLightBase));
-
-                    // Remember the original type
-                    if (g_originalLightTypes.find(spellFormId) == g_originalLightTypes.end()) {
-                        g_originalLightTypes[spellFormId] = currentLightType;
-                    }
-
                     // Modify the base form
                     uint8_t newType = wantShadows ? static_cast<uint8_t>(LightType::OmniShadow)
                                                   : static_cast<uint8_t>(LightType::OmniNS);
@@ -90,10 +82,8 @@ namespace ActorShadowLimiter {
 
                         if (auto* tasks = SKSE::GetTaskInterface()) {
                             tasks->AddTask([spellLightBase, spellFormId]() {
-                                uint32_t originalType = g_originalLightTypes[spellFormId];
-                                SetLightTypeNative(spellLightBase, originalType);
-                                DebugPrint("UPDATE", "Restored spell 0x%08X base form to original type: %u",
-                                           spellFormId, originalType);
+                                SetLightTypeNative(spellLightBase, static_cast<uint8_t>(LightType::OmniNS));
+                                DebugPrint("UPDATE", "Restored spell 0x%08X base form to OmniNS", spellFormId);
                             });
                         }
                     }).detach();
@@ -115,12 +105,6 @@ namespace ActorShadowLimiter {
         }
 
         if (wantShadows != lastState) {
-            uint8_t currentLightType = static_cast<uint8_t>(GetLightType(lightBase));
-
-            if (g_originalLightTypes.find(lightFormId) == g_originalLightTypes.end()) {
-                g_originalLightTypes[lightFormId] = currentLightType;
-            }
-
             uint8_t newType =
                 wantShadows ? static_cast<uint8_t>(LightType::OmniShadow) : static_cast<uint8_t>(LightType::OmniNS);
             SetLightTypeNative(lightBase, newType);
@@ -139,12 +123,6 @@ namespace ActorShadowLimiter {
 
             bool lastState = g_lastShadowStates[armorFormId];
             if (wantShadows != lastState) {
-                uint8_t currentLightType = static_cast<uint8_t>(GetLightType(armorLight));
-
-                if (g_originalLightTypes.find(armorFormId) == g_originalLightTypes.end()) {
-                    g_originalLightTypes[armorFormId] = currentLightType;
-                }
-
                 uint8_t newType =
                     wantShadows ? static_cast<uint8_t>(LightType::OmniShadow) : static_cast<uint8_t>(LightType::OmniNS);
                 SetLightTypeNative(armorLight, newType);
@@ -168,10 +146,7 @@ namespace ActorShadowLimiter {
 
                                     if (auto* tasks2 = SKSE::GetTaskInterface()) {
                                         tasks2->AddTask([armorLight, armorFormId]() {
-                                            if (g_originalLightTypes.find(armorFormId) != g_originalLightTypes.end()) {
-                                                uint32_t originalType = g_originalLightTypes[armorFormId];
-                                                SetLightTypeNative(armorLight, originalType);
-                                            }
+                                            SetLightTypeNative(armorLight, static_cast<uint8_t>(LightType::OmniNS));
                                         });
                                     }
                                 }).detach();
