@@ -256,7 +256,7 @@ namespace ActorShadowLimiter {
 
         if (!file.is_open()) {
             // Use defaults if file doesn't exist
-            ConsolePrint("ActorShadows.ini not found, using defaults");
+            DebugPrint("CONFIG", "ActorShadows.ini not found, using defaults");
             return;
         }
 
