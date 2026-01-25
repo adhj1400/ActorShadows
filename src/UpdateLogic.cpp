@@ -206,6 +206,10 @@ namespace ActorShadowLimiter {
         bool hasActiveArmors = !activeArmors.empty();
         bool noActiveItems = !hasActiveTorch && !hasActiveSpells && !hasActiveArmors;
 
+        if (g_config.enableDebug) {
+            LogUnrestoredLights();
+        }
+
         if (noActiveItems) {
             if (g_shouldPoll) {
                 DebugPrint("UPDATE", "No configured lights, spells, or armors active - disabling polling");

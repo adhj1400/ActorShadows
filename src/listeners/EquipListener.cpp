@@ -26,16 +26,7 @@ namespace ActorShadowLimiter {
 
     RE::BSEventNotifyControl EquipListener::ProcessEvent(const RE::TESEquipEvent* event,
                                                          RE::BSTEventSource<RE::TESEquipEvent>*) {
-        if (!event || !event->actor) {
-            return RE::BSEventNotifyControl::kContinue;
-        }
-
-        auto* actor = event->actor.get();
-        if (!IsPlayer(actor)) {
-            return RE::BSEventNotifyControl::kContinue;
-        }
-
-        if (!event->equipped) {
+        if (!IsPlayerEquipEvent(event) || !event->equipped) {
             return RE::BSEventNotifyControl::kContinue;
         }
 

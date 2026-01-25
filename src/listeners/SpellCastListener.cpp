@@ -14,6 +14,8 @@ namespace ActorShadowLimiter {
     }
 
     void SpellCastListener::Install() {
+        BuildEffectToSpellMapping();
+
         auto* eventSource = RE::ScriptEventSourceHolder::GetSingleton();
         if (eventSource) {
             eventSource->AddEventSink<RE::TESSpellCastEvent>(GetSingleton());
@@ -23,11 +25,7 @@ namespace ActorShadowLimiter {
 
     RE::BSEventNotifyControl SpellCastListener::ProcessEvent(const RE::TESSpellCastEvent* event,
                                                              RE::BSTEventSource<RE::TESSpellCastEvent>*) {
-        if (!event || !event->object) {
-            return RE::BSEventNotifyControl::kContinue;
-        }
-
-        if (!IsPlayer(event->object.get())) {
+        if (!IsPlayerSpellCastEvent(event)) {
             return RE::BSEventNotifyControl::kContinue;
         }
 
