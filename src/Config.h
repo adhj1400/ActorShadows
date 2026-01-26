@@ -51,6 +51,9 @@ namespace ActorShadowLimiter {
         bool enableExterior = true;
         float maxSearchRadius = 6000.0f;
         float shadowDistanceSafetyMargin = 0.0f;
+        bool enableNpcs = false;
+        bool enableNpcsInterior = true;
+        bool enableNpcsExterior = true;
 
         std::vector<HandHeldLightConfig> handHeldLights;
         std::vector<SpellConfig> spells;

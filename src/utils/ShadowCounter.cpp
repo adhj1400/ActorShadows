@@ -1,6 +1,9 @@
 #include "ShadowCounter.h"
 
 #include "../Config.h"
+#include "../Globals.h"
+#include "ActorLight.h"
+#include "ActorTracker.h"
 #include "Console.h"
 #include "SKSE/SKSE.h"
 
@@ -142,6 +145,56 @@ namespace ActorShadowLimiter {
                                 countInCell(gridCell);
                             }
                         }
+                    }
+                }
+            }
+        }
+
+        // Count actor-equipped lights that currently have shadows enabled
+        // Check player
+        uint32_t playerFormId = player->GetFormID();
+        auto& tracker = ActorTracker::GetSingleton();
+        auto playerLight = GetEquippedLight(player);
+        if (playerLight && tracker.GetShadowState(playerFormId, playerLight->GetFormID())) {
+            shadowLightCount++;
+        }
+
+        // Count active spell lights for player
+        for (uint32_t spellId : GetActiveConfiguredSpells(player)) {
+            if (tracker.GetShadowState(playerFormId, spellId)) {
+                shadowLightCount++;
+            }
+        }
+
+        // Count active armor lights for player
+        for (uint32_t armorId : GetActiveConfiguredEnchantedArmors(player)) {
+            if (tracker.GetShadowState(playerFormId, armorId)) {
+                shadowLightCount++;
+            }
+        }
+
+        // Count NPC lights if NPC support is enabled
+        if (g_config.enableNpcs) {
+            for (uint32_t npcFormId : ActorTracker::GetSingleton().GetTrackedActors()) {
+                auto* npc = RE::TESForm::LookupByID<RE::Actor>(npcFormId);
+                if (!npc || !npc->Is3DLoaded()) {
+                    continue;
+                }
+
+                auto npcLight = GetEquippedLight(npc);
+                if (npcLight && tracker.GetShadowState(npcFormId, npcLight->GetFormID())) {
+                    shadowLightCount++;
+                }
+
+                for (uint32_t spellId : GetActiveConfiguredSpells(npc)) {
+                    if (tracker.GetShadowState(npcFormId, spellId)) {
+                        shadowLightCount++;
+                    }
+                }
+
+                for (uint32_t armorId : GetActiveConfiguredEnchantedArmors(npc)) {
+                    if (tracker.GetShadowState(npcFormId, armorId)) {
+                        shadowLightCount++;
                     }
                 }
             }

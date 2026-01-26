@@ -7,10 +7,12 @@
 #include "Globals.h"
 #include "LightManager.h"
 #include "SKSE/SKSE.h"
+#include "utils/ActorTracker.h"
 #include "utils/Console.h"
 #include "utils/Helpers.h"
 #include "utils/Light.h"
 #include "utils/MagicEffect.h"
+#include "utils/ShadowAllocator.h"
 #include "utils/ShadowCounter.h"
 
 namespace ActorShadowLimiter {
@@ -44,7 +46,9 @@ namespace ActorShadowLimiter {
                 }
 
                 // Only update if state changed from last known state
-                bool lastState = g_lastShadowStates[spellFormId];
+                uint32_t playerFormId = player->GetFormID();
+                auto& tracker = ActorTracker::GetSingleton();
+                bool lastState = tracker.GetShadowState(playerFormId, spellFormId);
                 if (wantShadows != lastState) {
                     DebugPrint("UPDATE", "Spell 0x%08X shadow state changed: %s", spellFormId,
                                wantShadows ? "ENABLE" : "DISABLE");
@@ -88,7 +92,7 @@ namespace ActorShadowLimiter {
                         }
                     }).detach();
 
-                    g_lastShadowStates[spellFormId] = wantShadows;
+                    tracker.SetShadowState(playerFormId, spellFormId, wantShadows);
                 }
             }
         }
@@ -103,7 +107,9 @@ namespace ActorShadowLimiter {
             return;
         }
 
-        bool currentlyHasShadows = g_lastShadowStates[lightFormId];
+        uint32_t playerFormId = player->GetFormID();
+        auto& tracker = ActorTracker::GetSingleton();
+        bool currentlyHasShadows = tracker.GetShadowState(playerFormId, lightFormId);
         bool shadowStateChanged = (wantShadows != currentlyHasShadows);
 
         if (shadowStateChanged) {
@@ -111,11 +117,15 @@ namespace ActorShadowLimiter {
                 wantShadows ? static_cast<uint8_t>(LightType::OmniShadow) : static_cast<uint8_t>(LightType::OmniNS);
             SetLightTypeNative(lightBase, newType);
             ForceReequipLight(player);
-            g_lastShadowStates[lightFormId] = wantShadows;
+            tracker.SetShadowState(playerFormId, lightFormId, wantShadows);
         }
     }
 
     void HandleEnchantedArmorLogic(std::vector<uint32_t> activeArmors, bool wantShadows, bool initialEquip) {
+        auto* player = RE::PlayerCharacter::GetSingleton();
+        uint32_t playerFormId = player->GetFormID();
+        auto& tracker = ActorTracker::GetSingleton();
+
         for (uint32_t armorFormId : activeArmors) {
             auto* armor = RE::TESForm::LookupByID<RE::TESObjectARMO>(armorFormId);
             if (!armor) continue;
@@ -123,7 +133,7 @@ namespace ActorShadowLimiter {
             auto* armorLight = GetLightFromEnchantedArmor(armor);
             if (!armorLight) continue;
 
-            bool lastState = g_lastShadowStates[armorFormId];
+            bool lastState = tracker.GetShadowState(playerFormId, armorFormId);
             if (wantShadows != lastState) {
                 uint8_t newType =
                     wantShadows ? static_cast<uint8_t>(LightType::OmniShadow) : static_cast<uint8_t>(LightType::OmniNS);
@@ -174,12 +184,20 @@ namespace ActorShadowLimiter {
                     }).detach();
                 }
 
-                g_lastShadowStates[armorFormId] = wantShadows;
+                tracker.SetShadowState(playerFormId, armorFormId, wantShadows);
             }
         }
     }
 
-    void UpdatePlayerLightShadows(bool initialEquip) {
+    void UpdateLightShadows(bool initialEquip) {
+        // If NPC support is enabled, use the shadow allocation system instead
+        if (g_config.enableNpcs) {
+            ShadowAllocator::AllocateShadows();
+            return;
+        }
+
+        // TODO: remove below code once NPC support is stable and supports below code as well
+
         auto* player = RE::PlayerCharacter::GetSingleton();
         if (!player) {
             return;
@@ -221,11 +239,17 @@ namespace ActorShadowLimiter {
         }
 
         // Check which type currently has shadows enabled
-        bool torchHasShadows = hasActiveTorch && g_lastShadowStates[activeLight.value()];
+        uint32_t playerFormId = player->GetFormID();
+        auto& tracker = ActorTracker::GetSingleton();
+        bool torchHasShadows = hasActiveTorch && tracker.GetShadowState(playerFormId, activeLight.value());
         bool spellHasShadows = hasActiveSpells && std::any_of(activeSpells.begin(), activeSpells.end(),
-                                                              [](uint32_t id) { return g_lastShadowStates[id]; });
+                                                              [playerFormId, &tracker](uint32_t id) {
+                                                                  return tracker.GetShadowState(playerFormId, id);
+                                                              });
         bool armorHasShadows = hasActiveArmors && std::any_of(activeArmors.begin(), activeArmors.end(),
-                                                              [](uint32_t id) { return g_lastShadowStates[id]; });
+                                                              [playerFormId, &tracker](uint32_t id) {
+                                                                  return tracker.GetShadowState(playerFormId, id);
+                                                              });
 
         bool anyShadowsEnabled = torchHasShadows || spellHasShadows || armorHasShadows;
 
@@ -272,7 +296,7 @@ namespace ActorShadowLimiter {
                 // Only poll if we should be polling
                 if (g_shouldPoll) {
                     if (auto* tasks = SKSE::GetTaskInterface()) {
-                        tasks->AddTask([]() { UpdatePlayerLightShadows(); });
+                        tasks->AddTask([]() { UpdateLightShadows(); });
                     }
                 }
             }

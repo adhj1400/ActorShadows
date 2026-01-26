@@ -6,40 +6,21 @@
 #include "Config.h"
 #include "Globals.h"
 #include "SKSE/SKSE.h"
+#include "utils/ActorLight.h"
+#include "utils/ActorTracker.h"
 #include "utils/Console.h"
+#include "utils/Helpers.h"
 #include "utils/Light.h"
 #include "utils/MagicEffect.h"
 
 namespace ActorShadowLimiter {
 
-    RE::TESObjectLIGH* GetEquippedLight(RE::PlayerCharacter* player) {
-        if (!player) {
-            return nullptr;
-        }
-
-        RE::TESForm* right = player->GetEquippedObject(false);
-        RE::TESForm* left = player->GetEquippedObject(true);
-
-        auto asLight = [](RE::TESForm* form) -> RE::TESObjectLIGH* {
-            return form ? form->As<RE::TESObjectLIGH>() : nullptr;
-        };
-
-        if (auto* l = asLight(right)) {
-            return l;
-        }
-        if (auto* l = asLight(left)) {
-            return l;
-        }
-
-        return nullptr;
-    }
-
-    void ResetEquippedLightToNoShadow(RE::PlayerCharacter* player) {
-        if (!player) {
+    void ResetEquippedLightToNoShadow(RE::Actor* actor) {
+        if (!actor) {
             return;
         }
 
-        auto* lightBase = GetEquippedLight(player);
+        auto* lightBase = GetEquippedLight(actor);
         if (!lightBase) {
             return;
         }
@@ -64,16 +45,16 @@ namespace ActorShadowLimiter {
         SetLightTypeNative(lightBase, noShadowType);
 
         // Update last known state
-        g_lastShadowStates[lightFormId] = false;
+        ActorTracker::GetSingleton().SetShadowState(actor->GetFormID(), lightFormId, false);
     }
 
-    void ResetActiveSpellsToNoShadow(RE::PlayerCharacter* player) {
-        if (!player) {
+    void ResetActiveSpellsToNoShadow(RE::Actor* actor) {
+        if (!actor) {
             return;
         }
 
         // Get active configured spells
-        auto activeSpells = GetActiveConfiguredSpells(player);
+        auto activeSpells = GetActiveConfiguredSpells(actor);
         if (activeSpells.empty()) {
             return;
         }
@@ -107,17 +88,17 @@ namespace ActorShadowLimiter {
             SetLightTypeNative(lightBase, noShadowType);
 
             // Update last known state
-            g_lastShadowStates[spellFormId] = false;
+            ActorTracker::GetSingleton().SetShadowState(actor->GetFormID(), spellFormId, false);
         }
     }
 
-    void ResetActiveEnchantedArmorsToNoShadow(RE::PlayerCharacter* player) {
-        if (!player) {
+    void ResetActiveEnchantedArmorsToNoShadow(RE::Actor* actor) {
+        if (!actor) {
             return;
         }
 
         // Get active configured enchanted armors
-        auto activeArmors = GetActiveConfiguredEnchantedArmors(player);
+        auto activeArmors = GetActiveConfiguredEnchantedArmors(actor);
         if (activeArmors.empty()) {
             return;
         }
@@ -139,19 +120,22 @@ namespace ActorShadowLimiter {
             SetLightTypeNative(armorLight, noShadowType);
 
             // Update last known state
-            g_lastShadowStates[armorFormId] = false;
+            ActorTracker::GetSingleton().SetShadowState(actor->GetFormID(), armorFormId, false);
         }
     }
 
-    void ForceReequipLight(RE::PlayerCharacter* player) {
-        if (g_isReequipping) {
-            return;
-        }
-        if (!player || g_isReequipping) {
+    void ForceReequipLight(RE::Actor* actor) {
+        if (!actor) {
             return;
         }
 
-        auto* torchBase = GetEquippedLight(player);
+        uint32_t actorFormId = actor->GetFormID();
+        auto& tracker = ActorTracker::GetSingleton();
+        if (tracker.IsReequipping(actorFormId)) {
+            return;
+        }
+
+        auto* torchBase = GetEquippedLight(actor);
         if (!torchBase) {
             return;
         }
@@ -164,34 +148,56 @@ namespace ActorShadowLimiter {
         // Default to left hand slot (VR compatibility - GetObject crashes in VR)
         RE::BGSEquipSlot* slot = nullptr;
 
-        g_isReequipping = true;
+        tracker.StartReequip(actorFormId);
 
         uint32_t lightFormId = torchBase->GetFormID();
 
         // Try unequip/equip with null slot (works in both SE and VR)
-        equipManager->UnequipObject(player, torchBase, nullptr, 1, slot, true, false, false, false, nullptr);
-        equipManager->EquipObject(player, torchBase, nullptr, 1, slot, true, false, false, false);
+        equipManager->UnequipObject(actor, torchBase, nullptr, 1, slot, true, false, false, false, nullptr);
+        equipManager->EquipObject(actor, torchBase, nullptr, 1, slot, true, false, false, false);
 
-        // Restore base form after a delay so the reference keeps shadows but base form doesn't
-        std::thread([torchBase, lightFormId, player]() {
+        // Restore base form to OmniNS after delay (reference keeps shadows, base form is clean)
+        // For NPCs: DON'T restore to prevent ExtraLight system from creating duplicate non-shadow lights
+        std::thread([torchBase, lightFormId, actorFormId]() {
             using namespace std::chrono_literals;
             std::this_thread::sleep_for(1000ms);  // Longer delay to ensure reference is fully created with shadows
 
             if (auto* tasks = SKSE::GetTaskInterface()) {
-                tasks->AddTask([torchBase, lightFormId, player]() {
-                    SetLightTypeNative(torchBase, static_cast<uint8_t>(LightType::OmniNS));
-                    AdjustHeldLightPosition(player);
-                    DebugPrint("EQUIP", "Restored base form to OmniNS");
-                    g_isReequipping = false;
+                tasks->AddTask([torchBase, lightFormId, actorFormId]() {
+                    bool isPlayer = (actorFormId == 0x14);
+
+                    // Only restore base form for player (keeps inventory clean)
+                    // For NPCs, leave as OmniS to prevent ExtraLight duplicates on cell transitions
+                    if (isPlayer) {
+                        SetLightTypeNative(torchBase, static_cast<uint8_t>(LightType::OmniNS));
+                        DebugPrint("EQUIP", "Restored base form to OmniNS for player");
+                    } else {
+                        DebugPrint("EQUIP", "Left base form as OmniS for NPC 0x%08X (prevents ExtraLight duplicates)",
+                                   actorFormId);
+                    }
+
+                    // Adjust light position if actor is still valid
+                    auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorFormId);
+                    if (actor && actor->Is3DLoaded()) {
+                        AdjustHeldLightPosition(actor);
+                    }
+
+                    ActorTracker::GetSingleton().EndReequip(actorFormId);
                 });
             } else {
-                g_isReequipping = false;
+                ActorTracker::GetSingleton().EndReequip(actorFormId);
             }
         }).detach();
     }
 
-    void ForceReequipArmor(RE::PlayerCharacter* player, RE::TESObjectARMO* armor) {
-        if (!player || !armor || g_isReequipping) {
+    void ForceReequipArmor(RE::Actor* actor, RE::TESObjectARMO* armor) {
+        if (!actor || !armor) {
+            return;
+        }
+
+        uint32_t actorFormId = actor->GetFormID();
+        auto& tracker = ActorTracker::GetSingleton();
+        if (tracker.IsReequipping(actorFormId)) {
             return;
         }
 
@@ -200,21 +206,24 @@ namespace ActorShadowLimiter {
             return;
         }
 
-        g_isReequipping = true;
+        tracker.StartReequip(actorFormId);
         uint32_t armorFormId = armor->GetFormID();
         auto* armorLight = GetLightFromEnchantedArmor(armor);
 
         // Do entire sequence in one thread with delays between operations
-        std::thread([player, armor, armorLight, armorFormId, equipManager]() {
+        std::thread([actorFormId, armor, armorLight, armorFormId, equipManager]() {
             using namespace std::chrono_literals;
             constexpr auto unequipWaitTime = 100ms;
             constexpr auto enchantmentRespawnTime = 200ms;
 
             // Unequip
             if (auto* tasks = SKSE::GetTaskInterface()) {
-                tasks->AddTask([player, armor, equipManager]() {
-                    equipManager->UnequipObject(player, armor, nullptr, 1, nullptr, false, false, false, false,
-                                                nullptr);
+                tasks->AddTask([actorFormId, armor, equipManager]() {
+                    auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorFormId);
+                    if (actor) {
+                        equipManager->UnequipObject(actor, armor, nullptr, 1, nullptr, false, false, false, false,
+                                                    nullptr);
+                    }
                 });
             }
 
@@ -223,8 +232,11 @@ namespace ActorShadowLimiter {
 
             // Re-equip
             if (auto* tasks = SKSE::GetTaskInterface()) {
-                tasks->AddTask([player, armor, equipManager]() {
-                    equipManager->EquipObject(player, armor, nullptr, 1, nullptr, false, false, false, false);
+                tasks->AddTask([actorFormId, armor, equipManager]() {
+                    auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorFormId);
+                    if (actor) {
+                        equipManager->EquipObject(actor, armor, nullptr, 1, nullptr, false, false, false, false);
+                    }
                 });
             }
 
@@ -233,14 +245,14 @@ namespace ActorShadowLimiter {
 
             // Restore base form
             if (auto* tasks = SKSE::GetTaskInterface()) {
-                tasks->AddTask([armorLight, armorFormId]() {
+                tasks->AddTask([armorLight, armorFormId, actorFormId]() {
                     if (armorLight) {
                         SetLightTypeNative(armorLight, static_cast<uint8_t>(LightType::OmniNS));
                     }
-                    g_isReequipping = false;
+                    ActorTracker::GetSingleton().EndReequip(actorFormId);
                 });
             } else {
-                g_isReequipping = false;
+                ActorTracker::GetSingleton().EndReequip(actorFormId);
             }
         }).detach();
     }
@@ -267,18 +279,18 @@ namespace ActorShadowLimiter {
             }
         }
 
-        void AdjustLightNodePosition(RE::PlayerCharacter* player, const std::string& rootNodeName,
+        void AdjustLightNodePosition(RE::Actor* actor, const std::string& rootNodeName,
                                      const std::string& lightNodeName, float offsetX, float offsetY, float offsetZ,
                                      float rotateX, float rotateY, float rotateZ, uint32_t formId,
                                      const char* itemType) {
-            if (!player) return;
+            if (!actor) return;
             if (rootNodeName.empty() || lightNodeName.empty()) return;
 
             int totalAdjusted = 0;
 
             // Apply to both first person and third person models
-            auto* firstPerson3D = player->Get3D(true);
-            auto* thirdPerson3D = player->Get3D(false);
+            auto* firstPerson3D = actor->Get3D(true);
+            auto* thirdPerson3D = actor->Get3D(false);
 
             for (int modelIndex = 0; modelIndex < 2; ++modelIndex) {
                 auto* model3D = (modelIndex == 0) ? firstPerson3D : thirdPerson3D;
@@ -304,16 +316,50 @@ namespace ActorShadowLimiter {
                 }
 
                 int adjustedCount = 0;
+
                 // Apply transform to all light nodes within all root nodes
                 for (auto* rootNode : rootNodes) {
                     std::vector<RE::NiAVObject*> lightNodes;
                     FindAllNodesByName(rootNode, lightNodeName, lightNodes);
 
                     for (auto* lightNode : lightNodes) {
-                        // Move the light (Y axis because node rotation is flipped)
-                        lightNode->local.translate.x += offsetX;
-                        lightNode->local.translate.y += offsetY;
-                        lightNode->local.translate.z += offsetZ;
+                        // Rename the light node to mark it as managed by ActorShadows
+                        std::string newName = "ActorShadows_" + lightNodeName;
+                        lightNode->name = newName.c_str();
+
+                        DebugPrint("TRANSFORM", "Renamed '%s' to '%s' at 0x%p", lightNodeName.c_str(), newName.c_str(),
+                                   lightNode);
+
+                        // Also rename PtLight child if it exists
+                        if (auto* lightNodeAsNode = lightNode->AsNode()) {
+                            DebugPrint("TRANSFORM", "Light node is NiNode, searching for PtLight children");
+
+                            // Debug: List all direct children
+                            int childCount = 0;
+                            for (auto& child : lightNodeAsNode->GetChildren()) {
+                                if (child) {
+                                    const char* childName = child->name.c_str();
+                                    DebugPrint("TRANSFORM", "  Child %d: '%s' at 0x%p", childCount++,
+                                               childName ? childName : "<unnamed>", child.get());
+                                }
+                            }
+
+                            // Search for " PtLight" (note the leading space in vanilla name)
+                            std::vector<RE::NiAVObject*> ptLights;
+                            FindAllNodesByName(lightNodeAsNode, " PtLight", ptLights);
+                            DebugPrint("TRANSFORM", "Found %zu PtLight node(s)", ptLights.size());
+
+                            // Rename PtLight nodes to mark them as managed
+                            for (auto* ptLight : ptLights) {
+                                std::string ptLightNewName = "ActorShadows_Light";
+                                ptLight->name = ptLightNewName.c_str();
+                                DebugPrint("TRANSFORM", "Renamed PtLight to '%s' at 0x%p", ptLightNewName.c_str(),
+                                           ptLight);
+                            }
+                        } else {
+                            DebugPrint("TRANSFORM", "Light node '%s' is not NiNode, cannot search for PtLight children",
+                                       lightNode->name.c_str());
+                        }
 
                         // Apply rotation (in radians)
                         constexpr float DEG_TO_RAD = 3.14159265f / 180.0f;
@@ -344,9 +390,62 @@ namespace ActorShadowLimiter {
         }
     }
 
-    void AdjustHeldLightPosition(RE::PlayerCharacter* player) {
+    void CleanupDuplicateLightNodes(RE::Actor* actor) {
         // Find the equipped light's config
-        auto* lightBase = GetEquippedLight(player);
+        auto* lightBase = GetEquippedLight(actor);
+        if (!lightBase) {
+            return;
+        }
+
+        uint32_t lightFormId = lightBase->GetFormID();
+        const HandHeldLightConfig* lightConfig = nullptr;
+
+        for (const auto& config : g_config.handHeldLights) {
+            if (config.formId == lightFormId) {
+                lightConfig = &config;
+                break;
+            }
+        }
+
+        if (!lightConfig || lightConfig->lightNodeName.empty()) {
+            return;
+        }
+
+        int totalDeleted = 0;
+        auto* thirdPerson3D = actor->Get3D(false);
+        if (thirdPerson3D) {
+            std::vector<RE::NiAVObject*> lightNodes;
+            FindAllNodesByName(thirdPerson3D, lightConfig->lightNodeName, lightNodes);
+
+            // Only delete nodes that DON'T have the "ActorShadows_" prefix (vanilla duplicates)
+            for (auto* lightNode : lightNodes) {
+                if (!lightNode || !lightNode->parent) continue;
+
+                const char* nodeName = lightNode->name.c_str();
+                if (!nodeName) continue;
+
+                // Check if this is a managed node (has ActorShadows_ prefix)
+                bool isManagedNode = (std::string(nodeName).find("ActorShadows_") == 0);
+
+                if (!isManagedNode) {
+                    // This is a vanilla duplicate - remove it
+                    DebugPrint("CLEANUP", "Removing vanilla duplicate '%s' at 0x%p for actor 0x%08X", nodeName,
+                               lightNode, actor->GetFormID());
+                    lightNode->parent->DetachChild(lightNode);
+                    totalDeleted++;
+                }
+            }
+
+            if (totalDeleted > 0) {
+                DebugPrint("CLEANUP", "Deleted %d vanilla duplicate light node(s) for actor 0x%08X", totalDeleted,
+                           actor->GetFormID());
+            }
+        }
+    }
+
+    void AdjustHeldLightPosition(RE::Actor* actor) {
+        // Find the equipped light's config
+        auto* lightBase = GetEquippedLight(actor);
         if (!lightBase) return;
 
         uint32_t lightFormId = lightBase->GetFormID();
@@ -364,13 +463,16 @@ namespace ActorShadowLimiter {
             return;
         }
 
-        AdjustLightNodePosition(player, lightConfig->rootNodeName, lightConfig->lightNodeName, lightConfig->offsetX,
+        AdjustLightNodePosition(actor, lightConfig->rootNodeName, lightConfig->lightNodeName, lightConfig->offsetX,
                                 lightConfig->offsetY, lightConfig->offsetZ, lightConfig->rotateX, lightConfig->rotateY,
                                 lightConfig->rotateZ, lightFormId, "light");
+
+        // Clean up any vanilla duplicate light nodes that may have been created during cell transitions
+        CleanupDuplicateLightNodes(actor);
     }
 
-    void AdjustSpellLightPosition(RE::PlayerCharacter* player, uint32_t spellFormId) {
-        if (!player) return;
+    void AdjustSpellLightPosition(RE::Actor* actor, uint32_t spellFormId) {
+        if (!actor) return;
 
         // Find the spell's config
         const SpellConfig* spellConfig = nullptr;
@@ -387,13 +489,13 @@ namespace ActorShadowLimiter {
             return;
         }
 
-        AdjustLightNodePosition(player, spellConfig->rootNodeName, spellConfig->lightNodeName, spellConfig->offsetX,
+        AdjustLightNodePosition(actor, spellConfig->rootNodeName, spellConfig->lightNodeName, spellConfig->offsetX,
                                 spellConfig->offsetY, spellConfig->offsetZ, spellConfig->rotateX, spellConfig->rotateY,
                                 spellConfig->rotateZ, spellFormId, "spell");
     }
 
-    void AdjustEnchantmentLightPosition(RE::PlayerCharacter* player, uint32_t armorFormId) {
-        if (!player) return;
+    void AdjustEnchantmentLightPosition(RE::Actor* actor, uint32_t armorFormId) {
+        if (!actor) return;
         const EnchantedArmorConfig* armorConfig = nullptr;
 
         for (const auto& config : g_config.enchantedArmors) {
@@ -408,74 +510,9 @@ namespace ActorShadowLimiter {
             return;
         }
 
-        AdjustLightNodePosition(player, armorConfig->rootNodeName, armorConfig->lightNodeName, armorConfig->offsetX,
+        AdjustLightNodePosition(actor, armorConfig->rootNodeName, armorConfig->lightNodeName, armorConfig->offsetX,
                                 armorConfig->offsetY, armorConfig->offsetZ, armorConfig->rotateX, armorConfig->rotateY,
                                 armorConfig->rotateZ, armorFormId, "armor");
-    }
-
-    // Scan for any configured spells currently active on the player
-    std::vector<uint32_t> GetActiveConfiguredSpells(RE::PlayerCharacter* player) {
-        std::vector<uint32_t> activeSpells;
-
-        for (const auto& spellConfig : g_config.spells) {
-            auto* spell = RE::TESForm::LookupByID<RE::SpellItem>(spellConfig.formId);
-            if (!spell || spell->effects.size() == 0) continue;
-
-            // Check if any of this spell's effects are active
-            for (auto* effect : spell->effects) {
-                if (!effect || !effect->baseEffect) continue;
-
-                if (HasMagicEffect(player, effect->baseEffect->GetFormID())) {
-                    activeSpells.push_back(spellConfig.formId);
-                    break;  // Found this spell active, move to next spell
-                }
-            }
-        }
-
-        return activeSpells;
-    }
-
-    // Check if player has a configured hand-held light equipped
-    std::optional<uint32_t> GetActiveConfiguredLight(RE::PlayerCharacter* player) {
-        auto* lightBase = GetEquippedLight(player);
-        if (!lightBase) return std::nullopt;
-
-        uint32_t lightFormId = lightBase->GetFormID();
-
-        // Check if this light is in our configuration
-        for (const auto& config : g_config.handHeldLights) {
-            if (config.formId == lightFormId) {
-                return lightFormId;
-            }
-        }
-
-        return std::nullopt;
-    }
-
-    // Get all equipped enchanted armors from config
-    std::vector<uint32_t> GetActiveConfiguredEnchantedArmors(RE::PlayerCharacter* player) {
-        std::vector<uint32_t> activeArmors;
-        if (!player) return activeArmors;
-
-        auto inv = player->GetInventory();
-
-        for (const auto& [item, data] : inv) {
-            if (!item || !data.second) continue;
-            if (!data.second->IsWorn()) continue;
-
-            auto* armor = item->As<RE::TESObjectARMO>();
-            if (!armor) continue;
-
-            // Check if this armor is in our configuration
-            for (const auto& config : g_config.enchantedArmors) {
-                if (config.formId == armor->GetFormID()) {
-                    activeArmors.push_back(armor->GetFormID());
-                    break;
-                }
-            }
-        }
-
-        return activeArmors;
     }
 
     // Get the light from an enchanted armor's enchantment

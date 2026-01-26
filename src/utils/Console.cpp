@@ -3,6 +3,7 @@
 #include <sstream>
 
 #include "../Config.h"
+#include "ActorTracker.h"
 
 namespace ActorShadowLimiter {
     void InitializeLog() {
@@ -32,6 +33,67 @@ namespace ActorShadowLimiter {
         va_end(args);
 
         SKSE::log::info("[ActorShadows | {}] {}", action, buffer);
+    }
+
+    void PrintNPCNiNodeTrees() {
+        auto& tracker = ActorTracker::GetSingleton();
+        auto trackedActors = tracker.GetTrackedActors();
+
+        if (trackedActors.empty()) {
+            DebugPrint("NITREE", "No tracked NPCs to print");
+            return;
+        }
+
+        auto printNodeRecursive = [](RE::NiAVObject* node, int depth, auto& self) -> void {
+            if (!node) return;
+
+            std::string indent(depth * 2, ' ');
+            std::string nodeName = node->name.c_str() ? node->name.c_str() : "<unnamed>";
+            std::string nodeType = "NiAVObject";
+
+            if (node->AsNode()) {
+                nodeType = "NiNode";
+            }
+
+            DebugPrint("NITREE", "%s%s [%s] (0x%p)", indent.c_str(), nodeName.c_str(), nodeType.c_str(), node);
+
+            // If this is a node, recurse through children
+            if (auto* niNode = node->AsNode()) {
+                for (auto& child : niNode->GetChildren()) {
+                    if (child) {
+                        self(child.get(), depth + 1, self);
+                    }
+                }
+            }
+        };
+
+        for (uint32_t actorFormId : trackedActors) {
+            auto* actorForm = RE::TESForm::LookupByID<RE::Actor>(actorFormId);
+            if (!actorForm) {
+                continue;
+            }
+
+            auto* actor = actorForm->As<RE::Actor>();
+            if (!actor || actor->IsPlayerRef()) {
+                continue;
+            }
+
+            DebugPrint("NITREE", "\n=== NPC 0x%08X NiNode Tree (First Person) ===", actorFormId);
+            auto* firstPerson3D = actor->Get3D(true);
+            if (firstPerson3D) {
+                printNodeRecursive(firstPerson3D, 0, printNodeRecursive);
+            } else {
+                DebugPrint("NITREE", "First person 3D model not found");
+            }
+
+            DebugPrint("NITREE", "\n=== NPC 0x%08X NiNode Tree (Third Person) ===", actorFormId);
+            auto* thirdPerson3D = actor->Get3D(false);
+            if (thirdPerson3D) {
+                printNodeRecursive(thirdPerson3D, 0, printNodeRecursive);
+            } else {
+                DebugPrint("NITREE", "Third person 3D model not found");
+            }
+        }
     }
 
     void PrintPlayerNiNodeTree() {

@@ -21,8 +21,6 @@ namespace ActorShadowLimiter {
     };
 
     // Global state - generalized for any lights/spells
-    extern std::map<uint32_t, bool> g_lastShadowStates;  // FormID -> last shadow enabled state
-    extern bool g_isReequipping;
     extern std::atomic<bool> g_pollThreadRunning;
     extern std::atomic<bool> g_shouldPoll;  // Controls whether polling should happen
 

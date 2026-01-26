@@ -3,6 +3,7 @@
 #include "../Config.h"
 #include "../Globals.h"
 #include "../UpdateLogic.h"
+#include "../utils/ActorTracker.h"
 #include "../utils/Console.h"
 #include "../utils/Helpers.h"
 
@@ -42,10 +43,13 @@ namespace ActorShadowLimiter {
 
         DebugPrint("SPELLCAST", "Configured spell 0x%08X cast detected. Starting tracking.", spellFormId);
 
-        g_lastShadowStates[spellFormId] = false;
+        auto* player = RE::PlayerCharacter::GetSingleton();
+        if (player) {
+            ActorTracker::GetSingleton().SetShadowState(player->GetFormID(), spellFormId, false);
+        }
 
         EnablePolling();
-        UpdatePlayerLightShadows();
+        UpdateLightShadows();
 
         return RE::BSEventNotifyControl::kContinue;
     }

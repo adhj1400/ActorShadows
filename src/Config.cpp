@@ -309,6 +309,12 @@ namespace ActorShadowLimiter {
                 } catch (...) {
                     // Keep default
                 }
+            } else if (key == "EnableNpcs") {
+                g_config.enableNpcs = (value == "1" || value == "true");
+            } else if (key == "EnableNpcsInterior") {
+                g_config.enableNpcsInterior = (value == "1" || value == "true");
+            } else if (key == "EnableNpcsExterior") {
+                g_config.enableNpcsExterior = (value == "1" || value == "true");
             }
         }
 

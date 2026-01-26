@@ -4,6 +4,8 @@
 #include "../Globals.h"
 #include "../LightManager.h"
 #include "../UpdateLogic.h"
+#include "../utils/ActorLight.h"
+#include "../utils/ActorTracker.h"
 #include "../utils/Console.h"
 
 namespace ActorShadowLimiter {
@@ -49,8 +51,15 @@ namespace ActorShadowLimiter {
         }
 
         wasExterior = isExterior;
+
+        // Print NPC node trees for debugging cell transitions
+        if (g_config.enableNpcs) {
+            PrintNPCNiNodeTrees();
+        }
+
         EnablePolling();
 
         return RE::BSEventNotifyControl::kContinue;
     }
+
 }

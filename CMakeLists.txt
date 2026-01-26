@@ -20,6 +20,9 @@ add_commonlibsse_plugin(${PROJECT_NAME} SOURCES
     src/utils/Console.cpp
     src/utils/Light.cpp
     src/utils/Helpers.cpp
+    src/utils/ActorLight.cpp
+    src/utils/ActorTracker.cpp
+    src/utils/ShadowAllocator.cpp
     src/LightManager.cpp
     src/utils/ShadowCounter.cpp
     src/UpdateLogic.cpp
