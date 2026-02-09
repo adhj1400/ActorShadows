@@ -45,6 +45,7 @@ namespace ActorShadowLimiter {
 
     struct Config {
         int shadowLightLimit = 4;
+        int shadowLightLimitExterior = 3;
         bool enableDebug = false;
         int pollIntervalSeconds = 5;
         bool enableInterior = true;

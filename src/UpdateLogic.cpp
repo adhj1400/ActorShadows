@@ -199,7 +199,8 @@ namespace ActorShadowLimiter {
         }
 
         int shadowLightCount = CountNearbyShadowLights();
-        bool wantShadows = (shadowLightCount < g_config.shadowLightLimit);
+        int shadowLimit = isExterior ? g_config.shadowLightLimitExterior : g_config.shadowLightLimit;
+        bool wantShadows = (shadowLightCount < shadowLimit);
         auto activeSpells = GetActiveConfiguredSpells(player);
         auto activeLight = GetActiveConfiguredLight(player);
         auto activeArmors = GetActiveConfiguredEnchantedArmors(player);

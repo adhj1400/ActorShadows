@@ -285,6 +285,8 @@ namespace ActorShadowLimiter {
             // Parse settings
             if (key == "ShadowLightLimit") {
                 g_config.shadowLightLimit = std::stoi(value);
+            } else if (key == "ShadowLightLimitExterior") {
+                g_config.shadowLightLimitExterior = std::stoi(value);
             } else if (key == "EnableDebug") {
                 g_config.enableDebug = (value == "true" || value == "1" || value == "True" || value == "TRUE");
             } else if (key == "PollIntervalSeconds") {
@@ -313,8 +315,11 @@ namespace ActorShadowLimiter {
         }
 
         file.close();
-        DebugPrint("CONFIG", "ActorShadows config loaded: ShadowLimit=%d, MaxSearchRadius=%.1f, Debug=%s",
-                   g_config.shadowLightLimit, g_config.maxSearchRadius, g_config.enableDebug ? "ON" : "OFF");
+        DebugPrint(
+            "CONFIG",
+            "ActorShadows config loaded: ShadowLimit=%d (Interior), %d (Exterior), MaxSearchRadius=%.1f, Debug=%s",
+            g_config.shadowLightLimit, g_config.shadowLightLimitExterior, g_config.maxSearchRadius,
+            g_config.enableDebug ? "ON" : "OFF");
 
         // Resolve plugin-based form IDs to runtime form IDs
         ResolvePluginFormIDs();
