@@ -21,6 +21,7 @@ add_commonlibsse_plugin(${PROJECT_NAME} SOURCES
     src/utils/Light.cpp
     src/utils/Helpers.cpp
     src/utils/Cleanup.cpp
+    src/utils/Transforms.cpp
     src/LightManager.cpp
     src/UpdateLogic.cpp
     src/events/EquipListener.cpp
