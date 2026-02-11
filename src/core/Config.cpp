@@ -4,7 +4,7 @@
 #include <fstream>
 #include <sstream>
 
-#include "utils/Console.h"
+#include "../utils/Console.h"
 
 namespace ActorShadowLimiter {
 
@@ -15,6 +15,20 @@ namespace ActorShadowLimiter {
             if (config.formId == lightBase->GetFormID()) {
                 return true;
             }
+        }
+        return false;
+    }
+
+    bool IsInConfig(RE::TESForm* form) {
+        if (form->GetFormType() == RE::FormType::Light) {
+            auto* lightBase = form->As<RE::TESObjectLIGH>();
+            return IsInConfig(lightBase);
+        } else if (form->GetFormType() == RE::FormType::Spell) {
+            auto* spell = form->As<RE::SpellItem>();
+            return IsInConfig(spell);
+        } else if (form->GetFormType() == RE::FormType::Armor) {
+            auto* armor = form->As<RE::TESObjectARMO>();
+            return IsInConfig(armor);
         }
         return false;
     }
@@ -70,6 +84,75 @@ namespace ActorShadowLimiter {
             }
             return value;
         }
+    }
+
+    bool IsValidCell(RE::TESObjectCELL* cell) {
+        if (!cell) {
+            return false;
+        }
+
+        bool isExterior = cell->IsExteriorCell();
+
+        if (isExterior && !g_config.enableExterior) {
+            return false;
+        }
+        if (!isExterior && !g_config.enableInterior) {
+            return false;
+        }
+        return true;
+    }
+
+    bool IsValidActor(RE::Actor* actor) {
+        if (!actor) {
+            return false;
+        }
+        if (actor->IsPlayerRef()) {
+            return true;
+        }
+        if (actor->GetActorRuntimeData().currentProcess == nullptr || actor->IsDead() || actor->IsDeleted() ||
+            actor->IsDisabled() || actor->IsSummoned() || !actor->Is3DLoaded()) {
+            return false;
+        }
+
+        bool isNpc = actor->IsPlayerRef() == false;
+        if (isNpc && !g_config.enableNpc) {
+            return false;
+        }
+
+        auto* player = RE::PlayerCharacter::GetSingleton();
+        if (!player) {
+            return false;
+        }
+        auto* cell = player->GetParentCell();
+        if (!IsValidCell(cell)) {
+            return false;
+        }
+        if (actor->GetParentCell() != player->GetParentCell()) {
+            return false;
+        }
+        bool isExterior = cell->IsExteriorCell();
+        if (isNpc && isExterior && !g_config.enableNpcExterior) {
+            return false;
+        }
+        if (isNpc && !isExterior && !g_config.enableNpcInterior) {
+            return false;
+        }
+
+        return true;
+    }
+
+    int GetShadowLimit(RE::TESObjectCELL* cell) {
+        return cell->IsExteriorCell() ? g_config.shadowLightLimitExterior : g_config.shadowLightLimit;
+    }
+
+    bool IsActorWithinRange(RE::Actor* actor) {
+        auto* player = RE::PlayerCharacter::GetSingleton();
+        if (!player || !actor) {
+            return false;
+        }
+
+        float distance = player->GetPosition().GetDistance(actor->GetPosition());
+        return distance <= g_config.npcMaxDistance;
     }
 
     static void LoadJsonConfig() {
@@ -299,15 +382,29 @@ namespace ActorShadowLimiter {
                 g_config.enableInterior = (value == "true" || value == "1" || value == "True" || value == "TRUE");
             } else if (key == "EnableExterior") {
                 g_config.enableExterior = (value == "true" || value == "1" || value == "True" || value == "TRUE");
-            } else if (key == "MaxSearchRadius") {
-                try {
-                    g_config.maxSearchRadius = std::stof(value);
-                } catch (...) {
-                    // Keep default
-                }
+            } else if (key == "EnableNpc") {
+                g_config.enableNpc = (value == "true" || value == "1" || value == "True" || value == "TRUE");
+            } else if (key == "EnableNpcInterior") {
+                g_config.enableNpcInterior = (value == "true" || value == "1" || value == "True" || value == "TRUE");
+            } else if (key == "EnableNpcExterior") {
+                g_config.enableNpcExterior = (value == "true" || value == "1" || value == "True" || value == "TRUE");
             } else if (key == "ShadowDistanceSafetyMargin") {
                 try {
                     g_config.shadowDistanceSafetyMargin = std::stof(value);
+                } catch (...) {
+                    // Keep default
+                }
+            } else if (key == "NpcMaxDistance") {
+                try {
+                    g_config.npcMaxDistance = std::stof(value);
+                } catch (...) {
+                    // Keep default
+                }
+            } else if (key == "EnableDuplicateFix") {
+                g_config.enableDuplicateFix = (value == "true" || value == "1" || value == "True" || value == "TRUE");
+            } else if (key == "DuplicateRemovalIntervalMs") {
+                try {
+                    g_config.duplicateRemovalIntervalMs = std::stoi(value);
                 } catch (...) {
                     // Keep default
                 }
@@ -315,11 +412,21 @@ namespace ActorShadowLimiter {
         }
 
         file.close();
-        DebugPrint(
-            "CONFIG",
-            "ActorShadows config loaded: ShadowLimit=%d (Interior), %d (Exterior), MaxSearchRadius=%.1f, Debug=%s",
-            g_config.shadowLightLimit, g_config.shadowLightLimitExterior, g_config.maxSearchRadius,
-            g_config.enableDebug ? "ON" : "OFF");
+        DebugPrint("CONFIG",
+                   "ActorShadows config loaded:\n"
+                   "  ShadowLimit: %d (Interior), %d (Exterior)\n"
+                   "  Poll Interval: %d seconds\n"
+                   "  Debug: %s\n"
+                   "  Interior: %s, Exterior: %s\n"
+                   "  NPC: %s (Interior: %s, Exterior: %s)\n"
+                   "  Shadow Distance Safety Margin: %.1f\n"
+                   "  Duplicate Fix: %s (Interval: %dms)",
+                   g_config.shadowLightLimit, g_config.shadowLightLimitExterior, g_config.pollIntervalSeconds,
+                   g_config.enableDebug ? "ON" : "OFF", g_config.enableInterior ? "ON" : "OFF",
+                   g_config.enableExterior ? "ON" : "OFF", g_config.enableNpc ? "ON" : "OFF",
+                   g_config.enableNpcInterior ? "ON" : "OFF", g_config.enableNpcExterior ? "ON" : "OFF",
+                   g_config.shadowDistanceSafetyMargin, g_config.enableDuplicateFix ? "ON" : "OFF",
+                   g_config.duplicateRemovalIntervalMs);
 
         // Resolve plugin-based form IDs to runtime form IDs
         ResolvePluginFormIDs();

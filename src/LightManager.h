@@ -3,17 +3,19 @@
 #include "RE/Skyrim.h"
 
 namespace ActorShadowLimiter {
-    RE::TESObjectLIGH* GetEquippedLight(RE::PlayerCharacter* player);
-    void ResetEquippedLightToNoShadow(RE::PlayerCharacter* player);
-    void ResetActiveSpellsToNoShadow(RE::PlayerCharacter* player);
-    void ResetActiveEnchantedArmorsToNoShadow(RE::PlayerCharacter* player);
-    void ForceReequipLight(RE::PlayerCharacter* player);
-    void ForceReequipArmor(RE::PlayerCharacter* player, RE::TESObjectARMO* armor);
-    void AdjustHeldLightPosition(RE::PlayerCharacter* player);
-    void AdjustSpellLightPosition(RE::PlayerCharacter* player, uint32_t spellFormId);
-    void AdjustEnchantmentLightPosition(RE::PlayerCharacter* player, uint32_t armorFormId);
-    std::vector<uint32_t> GetActiveConfiguredSpells(RE::PlayerCharacter* player);
-    std::optional<uint32_t> GetActiveConfiguredLight(RE::PlayerCharacter* player);
-    std::vector<uint32_t> GetActiveConfiguredEnchantedArmors(RE::PlayerCharacter* player);
+    RE::TESObjectLIGH* GetEquippedLight(RE::Actor* actor);
+    void ResetEquippedLightToNoShadow(RE::Actor* actor);
+    void ResetActiveSpellsToNoShadow(RE::Actor* actor);
+    void ResetActiveEnchantedArmorsToNoShadow(RE::Actor* actor);
+    void ForceReEquipLight(RE::Actor* actor, RE::TESObjectLIGH* light, bool withShadows);
+    void ForceReEquipArmor(RE::Actor* actor, RE::TESObjectARMO* armor, bool withShadows);
+    void ForceCastSpell(RE::Actor* actor, RE::SpellItem* spell, bool withShadows);
+    void AdjustHeldLightPosition(RE::Actor* actor);
+    void AdjustSpellLightPosition(RE::Actor* actor, uint32_t spellFormId);
+    void AdjustEnchantmentLightPosition(RE::Actor* actor, uint32_t armorFormId);
+    int CountNearbyShadowLights();
+    std::vector<uint32_t> GetActiveConfiguredSpells(RE::Actor* actor);
+    std::optional<uint32_t> GetActiveConfiguredLight(RE::Actor* actor);
+    std::vector<uint32_t> GetActiveConfiguredEnchantedArmors(RE::Actor* actor);
     RE::TESObjectLIGH* GetLightFromEnchantedArmor(RE::TESObjectARMO* armor);
 }

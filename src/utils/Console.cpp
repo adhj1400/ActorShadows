@@ -2,7 +2,7 @@
 
 #include <sstream>
 
-#include "../Config.h"
+#include "../core/Config.h"
 
 namespace ActorShadowLimiter {
     void InitializeLog() {
@@ -31,7 +31,31 @@ namespace ActorShadowLimiter {
         vsnprintf(buffer, sizeof(buffer), format, args);
         va_end(args);
 
-        SKSE::log::info("[ActorShadows | {}] {}", action, buffer);
+        SKSE::log::info("[{}] {}", action, buffer);
+    }
+
+    void DebugPrint(const std::string& action, RE::Actor* actor, const char* format, ...) {
+        if (!g_config.enableDebug) return;
+
+        char buffer[1024];
+        va_list args;
+        va_start(args, format);
+        vsnprintf(buffer, sizeof(buffer), format, args);
+        va_end(args);
+
+        std::string actorInfo = "<null>";
+        if (actor) {
+            const char* actorName = actor->GetName();
+            uint32_t actorFormId = actor->GetFormID();
+            char formIdBuf[16];
+            snprintf(formIdBuf, sizeof(formIdBuf), "0x%08X", actorFormId);
+            actorInfo = actorName ? actorName : "<unnamed>";
+            actorInfo += " (";
+            actorInfo += formIdBuf;
+            actorInfo += ")";
+        }
+
+        SKSE::log::info("[{}] ['{}'] {}", action, actorInfo, buffer);
     }
 
     void PrintPlayerNiNodeTree() {

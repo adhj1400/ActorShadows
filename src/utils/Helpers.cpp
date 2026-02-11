@@ -1,7 +1,7 @@
 #include "Helpers.h"
 
-#include "../Config.h"
 #include "../LightManager.h"
+#include "../core/Config.h"
 #include "Console.h"
 #include "Light.h"
 
@@ -37,6 +37,8 @@ namespace ActorShadowLimiter {
     bool IsHandheldLight(RE::TESForm* form) { return form && form->GetFormType() == RE::FormType::Light; }
 
     bool IsLightEmittingArmor(RE::TESForm* form) { return form && form->GetFormType() == RE::FormType::Armor; }
+
+    bool IsSpellLight(RE::TESForm* form) { return form && form->GetFormType() == RE::FormType::Spell; }
 
     void WarnIfLightsHaveShadows() {
         bool foundShadows = false;
