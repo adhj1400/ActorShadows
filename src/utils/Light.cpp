@@ -1,6 +1,6 @@
 #include "Light.h"
 
-#include "../Globals.h"
+#include "../core/Globals.h"
 
 namespace ActorShadowLimiter {
 
@@ -56,24 +56,11 @@ namespace ActorShadowLimiter {
 
         auto& flags = a_light->data.flags;
         switch (a_type) {
-            case static_cast<std::uint32_t>(LightType::HemiShadow):
-                flags.reset(FLAGS::kOmniShadow, FLAGS::kSpotlight, FLAGS::kSpotShadow);
-                flags.set(FLAGS::kHemiShadow);
-                break;
             case static_cast<std::uint32_t>(LightType::OmniNS):
                 flags.reset(FLAGS::kHemiShadow, FLAGS::kOmniShadow, FLAGS::kSpotlight, FLAGS::kSpotShadow);
                 break;
             case static_cast<std::uint32_t>(LightType::OmniShadow):
-                flags.reset(FLAGS::kHemiShadow, FLAGS::kSpotlight, FLAGS::kSpotShadow);
                 flags.set(FLAGS::kOmniShadow);
-                break;
-            case static_cast<std::uint32_t>(LightType::Spotlight):
-                flags.reset(FLAGS::kHemiShadow, FLAGS::kOmniShadow, FLAGS::kSpotShadow);
-                flags.set(FLAGS::kSpotlight);
-                break;
-            case static_cast<std::uint32_t>(LightType::SpotShadow):
-                flags.reset(FLAGS::kHemiShadow, FLAGS::kOmniShadow, FLAGS::kSpotlight);
-                flags.set(FLAGS::kSpotShadow);
                 break;
             default:
                 break;

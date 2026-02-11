@@ -14,18 +14,19 @@ find_package(CommonLibSSE CONFIG REQUIRED)
 
 add_commonlibsse_plugin(${PROJECT_NAME} SOURCES 
     src/main.cpp
-    src/Config.cpp
-    src/Globals.cpp
+    src/core/Config.cpp
+    src/core/Globals.cpp
     src/utils/MagicEffect.cpp
     src/utils/Console.cpp
     src/utils/Light.cpp
     src/utils/Helpers.cpp
     src/LightManager.cpp
-    src/utils/ShadowCounter.cpp
     src/UpdateLogic.cpp
-    src/listeners/EquipListener.cpp
-    src/listeners/SpellCastListener.cpp
-    src/listeners/CellListener.cpp
+    src/events/EquipListener.cpp
+    src/events/SpellCastListener.cpp
+    src/events/CellListener.cpp
+    src/actor/TrackedActor.cpp
+    src/actor/ActorTracker.cpp
 ) # <--- specifies all source files
 
 target_link_libraries(${PROJECT_NAME} PUBLIC CommonLibSSE::CommonLibSSE)

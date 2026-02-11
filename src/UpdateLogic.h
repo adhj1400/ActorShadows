@@ -1,8 +1,9 @@
 #pragma once
 
 namespace ActorShadowLimiter {
-    void UpdatePlayerLightShadows(bool initialEquip = false);
+    void UpdateTrackedLights();
     void StartShadowPollThread();
     void EnablePolling();
     void DisablePolling();
+    bool EvaluateActorAndScene(RE::Actor* actor);
 }

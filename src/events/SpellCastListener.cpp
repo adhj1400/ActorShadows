@@ -1,8 +1,8 @@
 #include "SpellCastListener.h"
 
-#include "../Config.h"
-#include "../Globals.h"
 #include "../UpdateLogic.h"
+#include "../core/Config.h"
+#include "../core/Globals.h"
 #include "../utils/Console.h"
 #include "../utils/Helpers.h"
 
@@ -44,8 +44,8 @@ namespace ActorShadowLimiter {
 
         g_lastShadowStates[spellFormId] = false;
 
-        EnablePolling();
-        UpdatePlayerLightShadows();
+        // EnablePolling();
+        // UpdatePlayerLightShadows();
 
         return RE::BSEventNotifyControl::kContinue;
     }

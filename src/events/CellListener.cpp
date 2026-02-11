@@ -1,9 +1,9 @@
 #include "CellListener.h"
 
-#include "../Config.h"
-#include "../Globals.h"
 #include "../LightManager.h"
 #include "../UpdateLogic.h"
+#include "../core/Config.h"
+#include "../core/Globals.h"
 #include "../utils/Console.h"
 
 namespace ActorShadowLimiter {
@@ -42,14 +42,14 @@ namespace ActorShadowLimiter {
         auto* cell = player->GetParentCell();
         bool isExterior = cell && cell->IsExteriorCell();
 
-        if (cell && (!wasExterior || !isExterior)) {
-            ResetEquippedLightToNoShadow(player);
-            ResetActiveSpellsToNoShadow(player);
-            ResetActiveEnchantedArmorsToNoShadow(player);
-        }
+        // if (cell && (!wasExterior || !isExterior)) {
+        //     ResetEquippedLightToNoShadow(player);
+        //     ResetActiveSpellsToNoShadow(player);
+        //     ResetActiveEnchantedArmorsToNoShadow(player);
+        // }
 
         wasExterior = isExterior;
-        EnablePolling();
+        // EnablePolling();
 
         return RE::BSEventNotifyControl::kContinue;
     }

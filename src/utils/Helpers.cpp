@@ -1,7 +1,7 @@
 #include "Helpers.h"
 
-#include "../Config.h"
 #include "../LightManager.h"
+#include "../core/Config.h"
 #include "Console.h"
 #include "Light.h"
 

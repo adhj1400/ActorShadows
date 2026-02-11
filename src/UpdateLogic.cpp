@@ -3,15 +3,16 @@
 #include <chrono>
 #include <thread>
 
-#include "Config.h"
-#include "Globals.h"
 #include "LightManager.h"
 #include "SKSE/SKSE.h"
+#include "actor/ActorTracker.h"
+#include "actor/TrackedActor.h"
+#include "core/Config.h"
+#include "core/Globals.h"
 #include "utils/Console.h"
 #include "utils/Helpers.h"
 #include "utils/Light.h"
 #include "utils/MagicEffect.h"
-#include "utils/ShadowCounter.h"
 
 namespace ActorShadowLimiter {
     void HandleSpellLogic(std::vector<std::seed_seq::result_type> activeSpells, bool wantShadows) {
@@ -94,27 +95,6 @@ namespace ActorShadowLimiter {
         }
     }
 
-    void HandleHeldLightsLogic(std::optional<uint32_t> activeLight, bool wantShadows) {
-        uint32_t lightFormId = activeLight.value();
-        auto* player = RE::PlayerCharacter::GetSingleton();
-        auto* lightBase = GetEquippedLight(player);
-
-        if (!lightBase) {
-            return;
-        }
-
-        bool currentlyHasShadows = g_lastShadowStates[lightFormId];
-        bool shadowStateChanged = (wantShadows != currentlyHasShadows);
-
-        if (shadowStateChanged) {
-            uint8_t newType =
-                wantShadows ? static_cast<uint8_t>(LightType::OmniShadow) : static_cast<uint8_t>(LightType::OmniNS);
-            SetLightTypeNative(lightBase, newType);
-            ForceReequipLight(player);
-            g_lastShadowStates[lightFormId] = wantShadows;
-        }
-    }
-
     void HandleEnchantedArmorLogic(std::vector<uint32_t> activeArmors, bool wantShadows, bool initialEquip) {
         for (uint32_t armorFormId : activeArmors) {
             auto* armor = RE::TESForm::LookupByID<RE::TESObjectARMO>(armorFormId);
@@ -179,81 +159,151 @@ namespace ActorShadowLimiter {
         }
     }
 
-    void UpdatePlayerLightShadows(bool initialEquip) {
-        auto* player = RE::PlayerCharacter::GetSingleton();
-        if (!player) {
-            return;
+    /**
+     * Evaluate the scene and returns wether shadows can be applied or not.
+     */
+    bool EvaluateActorAndScene(RE::Actor* actor) {
+        auto* origoActor = RE::PlayerCharacter::GetSingleton();
+        if (!origoActor) {
+            return false;
         }
 
-        auto* cell = player->GetParentCell();
-        if (!cell) {
-            return;
+        auto* cell = origoActor->GetParentCell();
+        if (!IsValidCell(cell)) {
+            return false;
         }
 
-        bool isExterior = cell->IsExteriorCell();
-        if (isExterior && !g_config.enableExterior) {
-            return;
-        }
-        if (!isExterior && !g_config.enableInterior) {
-            return;
+        // Fetch the actor
+        auto* trackedActor = ActorTracker::GetSingleton().GetActor(actor->GetFormID());
+
+        // If the actor somehow have been removed from the tracker - skip
+        if (!trackedActor) {
+            DebugPrint("WARN", actor, "Non-tracked actor was sent for evaluation. Skipping.");
+            return false;
         }
 
+        // Scan the scene - are we allowed to have shadows active?
         int shadowLightCount = CountNearbyShadowLights();
-        int shadowLimit = isExterior ? g_config.shadowLightLimitExterior : g_config.shadowLightLimit;
-        bool wantShadows = (shadowLightCount < shadowLimit);
-        auto activeSpells = GetActiveConfiguredSpells(player);
-        auto activeLight = GetActiveConfiguredLight(player);
-        auto activeArmors = GetActiveConfiguredEnchantedArmors(player);
-        bool hasActiveTorch = activeLight.has_value();
-        bool hasActiveSpells = !activeSpells.empty();
-        bool hasActiveArmors = !activeArmors.empty();
-        bool noActiveItems = !hasActiveTorch && !hasActiveSpells && !hasActiveArmors;
+        int shadowLimit = GetShadowLimit(cell);
 
-        if (g_config.enableDebug) {
-            LogUnrestoredLights();
+        return shadowLightCount < shadowLimit;
+    }
+
+    /**
+     * Main, non-actor-specific evaluation loop logic that runs continuously.
+     * Evaluates the scene and each of the tracked actors, force re-equips where necessary.
+     */
+    void UpdateTrackedLights() {
+        // Sanity checks
+        // Note: Cleanup should be done in the CellListener, i.e. if the player moves from a valid to a non-valid cell.
+        auto* origoActor = RE::PlayerCharacter::GetSingleton();
+        if (!origoActor) {
+            return;
         }
-
-        if (noActiveItems) {
-            if (g_shouldPoll) {
-                DebugPrint("UPDATE", "No configured lights, spells, or armors active - disabling polling");
-                g_shouldPoll = false;
-            }
+        auto* cell = origoActor->GetParentCell();
+        if (!IsValidCell(cell)) {
             return;
         }
 
-        // Check which type currently has shadows enabled
-        bool torchHasShadows = hasActiveTorch && g_lastShadowStates[activeLight.value()];
-        bool spellHasShadows = hasActiveSpells && std::any_of(activeSpells.begin(), activeSpells.end(),
-                                                              [](uint32_t id) { return g_lastShadowStates[id]; });
-        bool armorHasShadows = hasActiveArmors && std::any_of(activeArmors.begin(), activeArmors.end(),
-                                                              [](uint32_t id) { return g_lastShadowStates[id]; });
+        // Count nearby shadow-casting lights and determine if we want shadows enabled
+        int shadowLightCount = CountNearbyShadowLights();
+        int shadowLimit = GetShadowLimit(cell);
+        bool shadowsAllowed = (shadowLightCount < shadowLimit);
 
-        bool anyShadowsEnabled = torchHasShadows || spellHasShadows || armorHasShadows;
+        // Adjust NPC lights based on shadow limit
+        int actorCountToProcess = std::abs(shadowLightCount - shadowLimit);
+        if (actorCountToProcess > 0) {
+            // Sort actors by distance: closest first when enabling shadows, furthest first when disabling
+            auto trackedActorIds = ActorTracker::GetSingleton().GetAllTrackedActorIds(true, shadowsAllowed);
+            int processed = 0;
 
-        // If shadows are enabled, only handle that type. Otherwise handle all active types.
-        if (!anyShadowsEnabled || armorHasShadows) {
-            if (hasActiveArmors) {
-                HandleEnchantedArmorLogic(activeArmors, wantShadows, initialEquip);
+            // Check all tracked actors and re-equip if needed
+            for (uint32_t actorFormId : trackedActorIds) {
+                if (processed >= actorCountToProcess) {
+                    break;
+                }
+
+                // Cleanup - Trailing actors
+                auto* trackedActor = ActorTracker::GetSingleton().GetActor(actorFormId);
+                if (!trackedActor || !trackedActor->HasTrackedLight()) {
+                    ActorTracker::GetSingleton().RemoveActor(actorFormId);
+                    continue;
+                }
+
+                // Cleanup - Invalid actors
+                auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorFormId);
+                if (!actor || !IsValidActor(actor)) {
+                    ActorTracker::GetSingleton().RemoveActor(actorFormId);
+                    continue;
+                }
+
+                // Get the tracked light for this actor
+                auto trackedLight = trackedActor->GetTrackedLight();
+                if (!trackedLight.has_value()) {
+                    continue;
+                }
+
+                uint32_t lightFormId = trackedLight.value();
+                auto* lightBase = RE::TESForm::LookupByID<RE::TESObjectLIGH>(lightFormId);
+                if (!lightBase) {
+                    continue;
+                }
+
+                bool isNewState = shadowsAllowed != trackedActor->GetLightShadowState(lightFormId);
+                if (isNewState) {
+                    DebugPrint("SCAN", actor, "State change required, changing light to: %s",
+                               shadowsAllowed ? "SHADOWS" : "STATIC");
+                    ForceReequipLight(actor, lightBase, shadowsAllowed);
+                }
+                processed++;
             }
         }
-        if (!anyShadowsEnabled || torchHasShadows) {
-            if (hasActiveTorch) {
-                HandleHeldLightsLogic(activeLight, wantShadows);
-            }
-        }
-        if (!anyShadowsEnabled || spellHasShadows) {
-            if (hasActiveSpells) {
-                HandleSpellLogic(activeSpells, wantShadows);
-            }
-        }
+
+        // auto activeSpells = GetActiveConfiguredSpells(player);
+        // auto activeLight = GetActiveConfiguredLight(player);
+        // auto activeArmors = GetActiveConfiguredEnchantedArmors(player);
+        // bool hasActiveTorch = activeLight.has_value();
+        // bool hasActiveSpells = !activeSpells.empty();
+        // bool hasActiveArmors = !activeArmors.empty();
+        // bool noActiveItems = !hasActiveTorch && !hasActiveSpells && !hasActiveArmors;
+
+        // if (noActiveItems) {
+        //     if (g_shouldPoll) {
+        //         DebugPrint("UPDATE", "No configured lights, spells, or armors active - disabling polling");
+        //         g_shouldPoll = false;
+        //     }
+        //     return;
+        // }
+
+        // // Check which type currently has shadows enabled
+        // bool torchHasShadows = hasActiveTorch && g_lastShadowStates[activeLight.value()];
+        // bool spellHasShadows = hasActiveSpells && std::any_of(activeSpells.begin(), activeSpells.end(),
+        //                                                       [](uint32_t id) { return g_lastShadowStates[id]; });
+        // bool armorHasShadows = hasActiveArmors && std::any_of(activeArmors.begin(), activeArmors.end(),
+        //                                                       [](uint32_t id) { return g_lastShadowStates[id]; });
+
+        // bool anyShadowsEnabled = torchHasShadows || spellHasShadows || armorHasShadows;
+
+        // // If shadows are enabled, only handle that type. Otherwise handle all active types.
+        // if (!anyShadowsEnabled || armorHasShadows) {
+        //     if (hasActiveArmors) {
+        //         HandleEnchantedArmorLogic(activeArmors, wantShadows, false);  // TODO: fix the last parameter
+        //     }
+        // }
+        // if (!anyShadowsEnabled || torchHasShadows) {
+        //     if (hasActiveTorch) {
+        //         HandleHeldLightsLogic(activeLight, wantShadows);
+        //     }
+        // }
+        // if (!anyShadowsEnabled || spellHasShadows) {
+        //     if (hasActiveSpells) {
+        //         HandleSpellLogic(activeSpells, wantShadows);
+        //     }
+        // }
     }
 
     void StartShadowPollThread() {
-        // Check if thread is already running
-        if (g_pollThreadRunning) {
-            return;
-        }
-
+        // Atomic, thread-safe check if thread is already running
         bool expected = false;
         if (!g_pollThreadRunning.compare_exchange_strong(expected, true)) {
             return;
@@ -261,19 +311,16 @@ namespace ActorShadowLimiter {
 
         std::thread([]() {
             using namespace std::chrono_literals;
-
             while (g_pollThreadRunning) {
                 std::this_thread::sleep_for(std::chrono::seconds(g_config.pollIntervalSeconds));
-
                 // Check again after sleep in case flag was set during sleep
                 if (!g_pollThreadRunning) {
                     break;
                 }
-
                 // Only poll if we should be polling
                 if (g_shouldPoll) {
                     if (auto* tasks = SKSE::GetTaskInterface()) {
-                        tasks->AddTask([]() { UpdatePlayerLightShadows(); });
+                        tasks->AddTask([]() { UpdateTrackedLights(); });
                     }
                 }
             }
@@ -282,13 +329,26 @@ namespace ActorShadowLimiter {
         DebugPrint("UPDATE", "Shadow poll thread started (%ds interval)", g_config.pollIntervalSeconds);
     }
 
+    /**
+     * Tries to enable polling, if not already enabled.
+     */
     void EnablePolling() {
-        if (!g_shouldPoll) {
-            DebugPrint("UPDATE", "Enabling shadow polling");
-            g_shouldPoll = true;
-            // Start the thread if it's not already running
-            StartShadowPollThread();
-        }
+        // Delay polling start by 4 seconds on a background thread, then execute on main thread
+        std::thread([=]() {
+            std::this_thread::sleep_for(std::chrono::seconds(4));
+
+            auto* taskQueue = SKSE::GetTaskInterface();
+            if (taskQueue) {
+                taskQueue->AddTask([]() {
+                    // Start polling if it's not already running
+                    if (!g_shouldPoll) {
+                        DebugPrint("UPDATE", "Enabling shadow polling");
+                        g_shouldPoll = true;
+                        StartShadowPollThread();
+                    }
+                });
+            }
+        }).detach();
     }
 
     void DisablePolling() {
