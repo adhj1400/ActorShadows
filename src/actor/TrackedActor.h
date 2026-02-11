@@ -14,6 +14,7 @@ namespace ActorShadowLimiter {
         uint32_t GetActorFormId() const;
 
         // Light tracking
+        void SetTrackedLight(uint32_t lightFormId);
         void SetLightShadowState(uint32_t lightFormId, bool hasShadows);
         bool GetLightShadowState(uint32_t lightFormId) const;
         bool HasAnyLightWithShadows() const;

@@ -54,6 +54,7 @@ namespace ActorShadowLimiter {
         bool enableNpcInterior = false;
         bool enableNpcExterior = false;
         float shadowDistanceSafetyMargin = 0.0f;
+        float npcMaxDistance = 10000.0f;
 
         std::vector<HandHeldLightConfig> handHeldLights;
         std::vector<SpellConfig> spells;
@@ -69,5 +70,6 @@ namespace ActorShadowLimiter {
     bool IsInConfig(RE::TESForm* form);
     bool IsValidCell(RE::TESObjectCELL* cell);
     bool IsValidActor(RE::Actor* actor);
+    bool IsActorWithinRange(RE::Actor* actor);
     int GetShadowLimit(RE::TESObjectCELL* cell);
 }

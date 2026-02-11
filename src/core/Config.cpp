@@ -114,12 +114,16 @@ namespace ActorShadowLimiter {
             return false;
         }
 
-        bool isNpc = actor->GetFormType() == RE::FormType::NPC;
+        bool isNpc = actor->IsPlayerRef() == false;
         if (isNpc && !g_config.enableNpc) {
             return false;
         }
 
-        auto* cell = actor->GetParentCell();
+        auto* player = RE::PlayerCharacter::GetSingleton();
+        if (!player) {
+            return false;
+        }
+        auto* cell = player->GetParentCell();
         if (!IsValidCell(cell)) {
             return false;
         }
@@ -137,6 +141,16 @@ namespace ActorShadowLimiter {
 
     int GetShadowLimit(RE::TESObjectCELL* cell) {
         return cell->IsExteriorCell() ? g_config.shadowLightLimitExterior : g_config.shadowLightLimit;
+    }
+
+    bool IsActorWithinRange(RE::Actor* actor) {
+        auto* player = RE::PlayerCharacter::GetSingleton();
+        if (!player || !actor) {
+            return false;
+        }
+
+        float distance = player->GetPosition().GetDistance(actor->GetPosition());
+        return distance <= g_config.npcMaxDistance;
     }
 
     static void LoadJsonConfig() {
@@ -378,12 +392,29 @@ namespace ActorShadowLimiter {
                 } catch (...) {
                     // Keep default
                 }
+            } else if (key == "NpcMaxDistance") {
+                try {
+                    g_config.npcMaxDistance = std::stof(value);
+                } catch (...) {
+                    // Keep default
+                }
             }
         }
 
         file.close();
-        DebugPrint("CONFIG", "ActorShadows config loaded: ShadowLimit=%d (Interior), %d (Exterior), Debug=%s",
-                   g_config.shadowLightLimit, g_config.shadowLightLimitExterior, g_config.enableDebug ? "ON" : "OFF");
+        DebugPrint("CONFIG",
+                   "ActorShadows config loaded:\n"
+                   "  ShadowLimit: %d (Interior), %d (Exterior)\n"
+                   "  Poll Interval: %d seconds\n"
+                   "  Debug: %s\n"
+                   "  Interior: %s, Exterior: %s\n"
+                   "  NPC: %s (Interior: %s, Exterior: %s)\n"
+                   "  Shadow Distance Safety Margin: %.1f",
+                   g_config.shadowLightLimit, g_config.shadowLightLimitExterior, g_config.pollIntervalSeconds,
+                   g_config.enableDebug ? "ON" : "OFF", g_config.enableInterior ? "ON" : "OFF",
+                   g_config.enableExterior ? "ON" : "OFF", g_config.enableNpc ? "ON" : "OFF",
+                   g_config.enableNpcInterior ? "ON" : "OFF", g_config.enableNpcExterior ? "ON" : "OFF",
+                   g_config.shadowDistanceSafetyMargin);
 
         // Resolve plugin-based form IDs to runtime form IDs
         ResolvePluginFormIDs();

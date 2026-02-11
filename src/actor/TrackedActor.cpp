@@ -6,6 +6,8 @@ namespace ActorShadowLimiter {
 
     uint32_t TrackedActor::GetActorFormId() const { return actorFormId_; }
 
+    void TrackedActor::SetTrackedLight(uint32_t lightFormId) { trackedLightFormId_ = lightFormId; }
+
     void TrackedActor::SetLightShadowState(uint32_t lightFormId, bool hasShadows) {
         trackedLightFormId_ = lightFormId;
         hasShadows_ = hasShadows;

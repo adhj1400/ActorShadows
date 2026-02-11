@@ -95,69 +95,70 @@ namespace ActorShadowLimiter {
         }
     }
 
-    void HandleEnchantedArmorLogic(std::vector<uint32_t> activeArmors, bool wantShadows, bool initialEquip) {
-        for (uint32_t armorFormId : activeArmors) {
-            auto* armor = RE::TESForm::LookupByID<RE::TESObjectARMO>(armorFormId);
-            if (!armor) continue;
+    // void HandleEnchantedArmorLogic(std::vector<uint32_t> activeArmors, bool wantShadows, bool initialEquip) {
+    //     for (uint32_t armorFormId : activeArmors) {
+    //         auto* armor = RE::TESForm::LookupByID<RE::TESObjectARMO>(armorFormId);
+    //         if (!armor) continue;
 
-            auto* armorLight = GetLightFromEnchantedArmor(armor);
-            if (!armorLight) continue;
+    //         auto* armorLight = GetLightFromEnchantedArmor(armor);
+    //         if (!armorLight) continue;
 
-            bool lastState = g_lastShadowStates[armorFormId];
-            if (wantShadows != lastState) {
-                uint8_t newType =
-                    wantShadows ? static_cast<uint8_t>(LightType::OmniShadow) : static_cast<uint8_t>(LightType::OmniNS);
-                SetLightTypeNative(armorLight, newType);
+    //         bool lastState = g_lastShadowStates[armorFormId];
+    //         if (wantShadows != lastState) {
+    //             uint8_t newType =
+    //                 wantShadows ? static_cast<uint8_t>(LightType::OmniShadow) :
+    //                 static_cast<uint8_t>(LightType::OmniNS);
+    //             SetLightTypeNative(armorLight, newType);
 
-                // Re-equip armor after a delay to let the base form change settle
-                // We can skip this if it's the initial equip, because the light hasnt been spawned yet
-                if (!initialEquip) {
-                    std::thread([armor, armorLight, armorFormId]() {
-                        using namespace std::chrono_literals;
-                        std::this_thread::sleep_for(100ms);
+    //             // Re-equip armor after a delay to let the base form change settle
+    //             // We can skip this if it's the initial equip, because the light hasnt been spawned yet
+    //             if (!initialEquip) {
+    //                 std::thread([armor, armorLight, armorFormId]() {
+    //                     using namespace std::chrono_literals;
+    //                     std::this_thread::sleep_for(100ms);
 
-                        if (auto* tasks = SKSE::GetTaskInterface()) {
-                            tasks->AddTask([armor, armorLight, armorFormId]() {
-                                auto* pl = RE::PlayerCharacter::GetSingleton();
-                                if (pl) {
-                                    ForceReequipArmor(pl, armor);
-                                }
+    //                     if (auto* tasks = SKSE::GetTaskInterface()) {
+    //                         tasks->AddTask([armor, armorLight, armorFormId]() {
+    //                             auto* pl = RE::PlayerCharacter::GetSingleton();
+    //                             if (pl) {
+    //                                 ForceReEquipArmor(pl, armor);
+    //                             }
 
-                                std::thread([armorLight, armorFormId]() {
-                                    std::this_thread::sleep_for(500ms);
+    //                             std::thread([armorLight, armorFormId]() {
+    //                                 std::this_thread::sleep_for(500ms);
 
-                                    if (auto* tasks2 = SKSE::GetTaskInterface()) {
-                                        tasks2->AddTask([armorLight, armorFormId]() {
-                                            SetLightTypeNative(armorLight, static_cast<uint8_t>(LightType::OmniNS));
-                                        });
-                                    }
-                                }).detach();
-                            });
-                        }
-                    }).detach();
-                }
+    //                                 if (auto* tasks2 = SKSE::GetTaskInterface()) {
+    //                                     tasks2->AddTask([armorLight, armorFormId]() {
+    //                                         SetLightTypeNative(armorLight, static_cast<uint8_t>(LightType::OmniNS));
+    //                                     });
+    //                                 }
+    //                             }).detach();
+    //                         });
+    //                     }
+    //                 }).detach();
+    //             }
 
-                if (IsOfShadowType(newType)) {
-                    std::thread([armorFormId]() {
-                        using namespace std::chrono_literals;
-                        std::this_thread::sleep_for(500ms);  // These can be quite slow, wait longer
+    //             if (IsOfShadowType(newType)) {
+    //                 std::thread([armorFormId]() {
+    //                     using namespace std::chrono_literals;
+    //                     std::this_thread::sleep_for(500ms);  // These can be quite slow, wait longer
 
-                        if (auto* tasks = SKSE::GetTaskInterface()) {
-                            tasks->AddTask([armorFormId]() {
-                                auto* pl = RE::PlayerCharacter::GetSingleton();
-                                if (pl) {
-                                    PrintPlayerNiNodeTree();
-                                    AdjustEnchantmentLightPosition(pl, armorFormId);
-                                }
-                            });
-                        }
-                    }).detach();
-                }
+    //                     if (auto* tasks = SKSE::GetTaskInterface()) {
+    //                         tasks->AddTask([armorFormId]() {
+    //                             auto* pl = RE::PlayerCharacter::GetSingleton();
+    //                             if (pl) {
+    //                                 PrintPlayerNiNodeTree();
+    //                                 AdjustEnchantmentLightPosition(pl, armorFormId);
+    //                             }
+    //                         });
+    //                     }
+    //                 }).detach();
+    //             }
 
-                g_lastShadowStates[armorFormId] = wantShadows;
-            }
-        }
-    }
+    //             g_lastShadowStates[armorFormId] = wantShadows;
+    //         }
+    //     }
+    // }
 
     /**
      * Evaluate the scene and returns wether shadows can be applied or not.
@@ -205,12 +206,48 @@ namespace ActorShadowLimiter {
             return;
         }
 
+        // First pass: Always enforce distance limits on all tracked actors
+        auto allTrackedActorIds = ActorTracker::GetSingleton().GetAllTrackedActorIds();
+        for (uint32_t actorFormId : allTrackedActorIds) {
+            auto* trackedActor = ActorTracker::GetSingleton().GetActor(actorFormId);
+            if (!trackedActor || !trackedActor->HasTrackedLight()) {
+                ActorTracker::GetSingleton().RemoveActor(actorFormId);
+                continue;
+            }
+
+            auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorFormId);
+            if (!actor || !IsValidActor(actor)) {
+                ActorTracker::GetSingleton().RemoveActor(actorFormId);
+                continue;
+            }
+
+            // Enforce distance limit: disable shadows for actors beyond max range
+            if (!IsActorWithinRange(actor)) {
+                auto trackedLight = trackedActor->GetTrackedLight();
+                if (trackedLight.has_value()) {
+                    uint32_t lightFormId = trackedLight.value();
+                    if (trackedActor->GetLightShadowState(lightFormId)) {
+                        auto* form = RE::TESForm::LookupByID<RE::TESForm>(lightFormId);
+                        if (form) {
+                            DebugPrint("SCAN", actor, "Actor beyond max range, disabling shadows");
+                            if (IsHandheldLight(form)) {
+                                ForceReEquipLight(actor, form->As<RE::TESObjectLIGH>(), false);
+                            }
+                            if (IsLightEmittingArmor(form)) {
+                                ForceReEquipArmor(actor, form->As<RE::TESObjectARMO>(), false);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // Count nearby shadow-casting lights and determine if we want shadows enabled
         int shadowLightCount = CountNearbyShadowLights();
         int shadowLimit = GetShadowLimit(cell);
         bool shadowsAllowed = (shadowLightCount < shadowLimit);
 
-        // Adjust NPC lights based on shadow limit
+        // Second pass: Adjust NPC lights based on shadow limit
         int actorCountToProcess = std::abs(shadowLightCount - shadowLimit);
         if (actorCountToProcess > 0) {
             // Sort actors by distance: closest first when enabling shadows, furthest first when disabling
@@ -223,39 +260,45 @@ namespace ActorShadowLimiter {
                     break;
                 }
 
-                // Cleanup - Trailing actors
                 auto* trackedActor = ActorTracker::GetSingleton().GetActor(actorFormId);
                 if (!trackedActor || !trackedActor->HasTrackedLight()) {
-                    ActorTracker::GetSingleton().RemoveActor(actorFormId);
                     continue;
                 }
 
-                // Cleanup - Invalid actors
                 auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorFormId);
                 if (!actor || !IsValidActor(actor)) {
-                    ActorTracker::GetSingleton().RemoveActor(actorFormId);
                     continue;
                 }
 
-                // Get the tracked light for this actor
+                // Skip actors that are out of range (already handled in first pass)
+                if (!IsActorWithinRange(actor)) {
+                    continue;
+                }
+
                 auto trackedLight = trackedActor->GetTrackedLight();
                 if (!trackedLight.has_value()) {
                     continue;
                 }
 
                 uint32_t lightFormId = trackedLight.value();
-                auto* lightBase = RE::TESForm::LookupByID<RE::TESObjectLIGH>(lightFormId);
-                if (!lightBase) {
+                auto* form = RE::TESForm::LookupByID<RE::TESForm>(lightFormId);
+                if (!form) {
                     continue;
                 }
 
+                // Regular shadow limit processing
                 bool isNewState = shadowsAllowed != trackedActor->GetLightShadowState(lightFormId);
                 if (isNewState) {
                     DebugPrint("SCAN", actor, "State change required, changing light to: %s",
                                shadowsAllowed ? "SHADOWS" : "STATIC");
-                    ForceReequipLight(actor, lightBase, shadowsAllowed);
+                    if (IsHandheldLight(form)) {
+                        ForceReEquipLight(actor, form->As<RE::TESObjectLIGH>(), shadowsAllowed);
+                    }
+                    if (IsLightEmittingArmor(form)) {
+                        ForceReEquipArmor(actor, form->As<RE::TESObjectARMO>(), shadowsAllowed);
+                    }
+                    processed++;
                 }
-                processed++;
             }
         }
 

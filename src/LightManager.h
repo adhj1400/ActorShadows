@@ -7,8 +7,8 @@ namespace ActorShadowLimiter {
     void ResetEquippedLightToNoShadow(RE::Actor* actor);
     void ResetActiveSpellsToNoShadow(RE::Actor* actor);
     void ResetActiveEnchantedArmorsToNoShadow(RE::Actor* actor);
-    void ForceReequipLight(RE::Actor* actor, RE::TESObjectLIGH* light, bool withShadows);
-    void ForceReequipArmor(RE::Actor* actor, RE::TESObjectARMO* armor);
+    void ForceReEquipLight(RE::Actor* actor, RE::TESObjectLIGH* light, bool withShadows);
+    void ForceReEquipArmor(RE::Actor* actor, RE::TESObjectARMO* armor, bool withShadows);
     void AdjustHeldLightPosition(RE::Actor* actor);
     void AdjustSpellLightPosition(RE::Actor* actor, uint32_t spellFormId);
     void AdjustEnchantmentLightPosition(RE::Actor* actor, uint32_t armorFormId);

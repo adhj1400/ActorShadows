@@ -146,7 +146,7 @@ namespace ActorShadowLimiter {
      * 1. Modifying the tracked actors re-equip state and light shadow state
      * 2. Modifying the base form to the correct shadow/no-shadow type
      */
-    void ForceReequipLight(RE::Actor* actor, RE::TESObjectLIGH* light, bool withShadows) {
+    void ForceReEquipLight(RE::Actor* actor, RE::TESObjectLIGH* light, bool withShadows) {
         auto* equipManager = RE::ActorEquipManager::GetSingleton();
         TrackedActor* trackedActor = ActorTracker::GetSingleton().GetActor(actor->GetFormID());
         if (!equipManager || !trackedActor) {
@@ -194,25 +194,25 @@ namespace ActorShadowLimiter {
         }).detach();
     }
 
-    void ForceReequipArmor(RE::Actor* actor, RE::TESObjectARMO* armor) {
-        if (!actor || !armor || g_isReequipping) {
-            return;
-        }
-
+    void ForceReEquipArmor(RE::Actor* actor, RE::TESObjectARMO* armor, bool withShadows) {
         auto* equipManager = RE::ActorEquipManager::GetSingleton();
         if (!equipManager) {
             return;
         }
 
-        g_isReequipping = true;
-        uint32_t armorFormId = armor->GetFormID();
+        TrackedActor* trackedActor = ActorTracker::GetSingleton().GetActor(actor->GetFormID());
+        trackedActor->SetReEquipping(true);
+        trackedActor->SetLightShadowState(armor->GetFormID(), withShadows);
+
         auto* armorLight = GetLightFromEnchantedArmor(armor);
+        SetLightTypeNative(armorLight, static_cast<uint8_t>(withShadows ? LightType::OmniShadow : LightType::OmniNS));
 
         // Do entire sequence in one thread with delays between operations
-        std::thread([actor, armor, armorLight, armorFormId, equipManager]() {
+        std::thread([actor, armor, armorLight, equipManager, withShadows, trackedActor]() {
             using namespace std::chrono_literals;
-            constexpr auto unequipWaitTime = 100ms;
-            constexpr auto enchantmentRespawnTime = 200ms;
+            constexpr auto unequipWaitTime = 600ms;
+            constexpr auto enchantmentRespawnTime = 600ms;
+            uint32_t armorFormId = armor->GetFormID();
 
             // Unequip
             if (auto* tasks = SKSE::GetTaskInterface()) {
@@ -236,114 +236,109 @@ namespace ActorShadowLimiter {
 
             // Restore base form
             if (auto* tasks = SKSE::GetTaskInterface()) {
-                tasks->AddTask([armorLight, armorFormId]() {
+                tasks->AddTask([armorLight, armorFormId, trackedActor]() {
                     if (armorLight) {
                         SetLightTypeNative(armorLight, static_cast<uint8_t>(LightType::OmniNS));
                     }
-                    g_isReequipping = false;
+                    trackedActor->SetReEquipping(false);
                 });
-            } else {
-                g_isReequipping = false;
             }
         }).detach();
     }
 
-    namespace {
-        // Recursively find all nodes with the given name, needed in cases that nodes are duplicated
-        // e.g., multiple candlelight spells floating orb while re-casting
-        void FindAllNodesByName(RE::NiAVObject* root, const std::string& name, std::vector<RE::NiAVObject*>& results) {
-            if (!root) return;
+    // Recursively find all nodes with the given name, needed in cases that nodes are duplicated
+    // e.g., multiple candlelight spells floating orb while re-casting
+    void FindAllNodesByName(RE::NiAVObject* root, const std::string& name, std::vector<RE::NiAVObject*>& results) {
+        if (!root) return;
 
-            // Compare node name - handle both null and non-null names
-            const char* nodeName = root->name.c_str();
-            if (nodeName && std::string(nodeName) == name) {
-                results.push_back(root);
-            }
+        // Compare node name - handle both null and non-null names
+        const char* nodeName = root->name.c_str();
+        if (nodeName && std::string(nodeName) == name) {
+            results.push_back(root);
+        }
 
-            // If this is a node, search its children
-            if (auto* node = root->AsNode()) {
-                for (auto& child : node->GetChildren()) {
-                    if (child) {
-                        FindAllNodesByName(child.get(), name, results);
-                    }
+        // If this is a node, search its children
+        if (auto* node = root->AsNode()) {
+            for (auto& child : node->GetChildren()) {
+                if (child) {
+                    FindAllNodesByName(child.get(), name, results);
                 }
             }
         }
+    }
 
-        void AdjustLightNodePosition(RE::Actor* actor, const std::string& rootNodeName,
-                                     const std::string& lightNodeName, float offsetX, float offsetY, float offsetZ,
-                                     float rotateX, float rotateY, float rotateZ, uint32_t formId,
-                                     const char* itemType) {
-            if (!actor) return;
-            if (rootNodeName.empty() || lightNodeName.empty()) return;
+    void AdjustLightNodePosition(RE::Actor* actor, const std::string& rootNodeName, const std::string& lightNodeName,
+                                 float offsetX, float offsetY, float offsetZ, float rotateX, float rotateY,
+                                 float rotateZ, uint32_t formId, const char* itemType) {
+        if (!actor) return;
+        if (rootNodeName.empty() || lightNodeName.empty()) return;
 
-            int totalAdjusted = 0;
+        int totalAdjusted = 0;
 
-            // Apply to both first person and third person models
-            auto* firstPerson3D = actor->Get3D(true);
-            auto* thirdPerson3D = actor->Get3D(false);
+        // Apply to both first person and third person models
+        auto* firstPerson3D = actor->Get3D(true);
+        auto* thirdPerson3D = actor->Get3D(false);
 
-            for (int modelIndex = 0; modelIndex < 2; ++modelIndex) {
-                auto* model3D = (modelIndex == 0) ? firstPerson3D : thirdPerson3D;
-                if (!model3D) continue;
+        for (int modelIndex = 0; modelIndex < 2; ++modelIndex) {
+            auto* model3D = (modelIndex == 0) ? firstPerson3D : thirdPerson3D;
+            if (!model3D) continue;
 
-                const char* viewName = (modelIndex == 0) ? "first" : "third";
+            const char* viewName = (modelIndex == 0) ? "first" : "third";
 
-                // Find all root nodes with matching name (handles multiple nodes with same name, e.g., old + new)
-                std::vector<RE::NiAVObject*> rootNodes;
+            // Find all root nodes with matching name (handles multiple nodes with same name, e.g., old + new)
+            std::vector<RE::NiAVObject*> rootNodes;
 
-                // Check if the model3D itself matches the root node name
-                if (model3D->name == rootNodeName.c_str()) {
-                    rootNodes.push_back(model3D);
-                }
+            // Check if the model3D itself matches the root node name
+            if (model3D->name == rootNodeName.c_str()) {
+                rootNodes.push_back(model3D);
+            }
 
-                // Also search within the tree
-                FindAllNodesByName(model3D, rootNodeName, rootNodes);
+            // Also search within the tree
+            FindAllNodesByName(model3D, rootNodeName, rootNodes);
 
-                if (rootNodes.empty()) {
-                    DebugPrint("TRANSFORM", "Root node '%s' not found for %s 0x%08X in %s person view",
-                               rootNodeName.c_str(), itemType, formId, viewName);
-                    continue;
-                }
+            if (rootNodes.empty()) {
+                DebugPrint("TRANSFORM", "Root node '%s' not found for %s 0x%08X in %s person view",
+                           rootNodeName.c_str(), itemType, formId, viewName);
+                continue;
+            }
 
-                int adjustedCount = 0;
-                // Apply transform to all light nodes within all root nodes
-                for (auto* rootNode : rootNodes) {
-                    std::vector<RE::NiAVObject*> lightNodes;
-                    FindAllNodesByName(rootNode, lightNodeName, lightNodes);
+            int adjustedCount = 0;
+            // Apply transform to all light nodes within all root nodes
+            for (auto* rootNode : rootNodes) {
+                std::vector<RE::NiAVObject*> lightNodes;
+                FindAllNodesByName(rootNode, lightNodeName, lightNodes);
 
-                    for (auto* lightNode : lightNodes) {
-                        // Move the light (Y axis because node rotation is flipped)
-                        lightNode->local.translate.x += offsetX;
-                        lightNode->local.translate.y += offsetY;
-                        lightNode->local.translate.z += offsetZ;
+                for (auto* lightNode : lightNodes) {
+                    // Move the light (Y axis because node rotation is flipped)
+                    lightNode->local.translate.x += offsetX;
+                    lightNode->local.translate.y += offsetY;
+                    lightNode->local.translate.z += offsetZ;
 
-                        // Apply rotation (in radians)
-                        constexpr float DEG_TO_RAD = 3.14159265f / 180.0f;
-                        lightNode->local.rotate.SetEulerAnglesXYZ(rotateX * DEG_TO_RAD, rotateY * DEG_TO_RAD,
-                                                                  rotateZ * DEG_TO_RAD);
+                    // Apply rotation (in radians)
+                    constexpr float DEG_TO_RAD = 3.14159265f / 180.0f;
+                    lightNode->local.rotate.SetEulerAnglesXYZ(rotateX * DEG_TO_RAD, rotateY * DEG_TO_RAD,
+                                                              rotateZ * DEG_TO_RAD);
 
-                        // Update the node
-                        RE::NiUpdateData updateData;
-                        lightNode->Update(updateData);
-                        adjustedCount++;
-                    }
-                }
-
-                if (adjustedCount > 0) {
-                    DebugPrint("TRANSFORM",
-                               "Adjusted %d light node(s) '%s' within %zu root node(s) '%s' for %s 0x%08X in %s "
-                               "person view with values offset(%.2f, %.2f, %.2f) rotation(%.2f, %.2f, %.2f)",
-                               adjustedCount, lightNodeName.c_str(), rootNodes.size(), rootNodeName.c_str(), itemType,
-                               formId, viewName, offsetX, offsetY, offsetZ, rotateX, rotateY, rotateZ);
-                    totalAdjusted += adjustedCount;
+                    // Update the node
+                    RE::NiUpdateData updateData;
+                    lightNode->Update(updateData);
+                    adjustedCount++;
                 }
             }
 
-            if (totalAdjusted == 0) {
-                DebugPrint("TRANSFORM", "Light node '%s' not found in any model for %s 0x%08X", lightNodeName.c_str(),
-                           itemType, formId);
+            if (adjustedCount > 0) {
+                DebugPrint("TRANSFORM",
+                           "Adjusted %d light node(s) '%s' within %zu root node(s) '%s' for %s 0x%08X in %s "
+                           "person view with values offset(%.2f, %.2f, %.2f) rotation(%.2f, %.2f, %.2f)",
+                           adjustedCount, lightNodeName.c_str(), rootNodes.size(), rootNodeName.c_str(), itemType,
+                           formId, viewName, offsetX, offsetY, offsetZ, rotateX, rotateY, rotateZ);
+                totalAdjusted += adjustedCount;
             }
+        }
+
+        if (totalAdjusted == 0) {
+            DebugPrint("TRANSFORM", "Light node '%s' not found in any model for %s 0x%08X", lightNodeName.c_str(),
+                       itemType, formId);
         }
     }
 
@@ -481,51 +476,44 @@ namespace ActorShadowLimiter {
         return activeArmors;
     }
 
-    // Get the light from an enchanted armor's enchantment
+    /**
+     * Get the associated light from an enchanted armors enchantment.
+     */
     RE::TESObjectLIGH* GetLightFromEnchantedArmor(RE::TESObjectARMO* armor) {
+        // Sanity checks
         if (!armor) {
-            DebugPrint("ARMOR", "GetLightFromEnchantedArmor: armor is null");
+            DebugPrint("WARN", "GetLightFromEnchantedArmor: armor is null");
             return nullptr;
         }
-
-        DebugPrint("ARMOR", "Checking armor 0x%08X for enchantment", armor->GetFormID());
-
         if (!armor->formEnchanting) {
-            DebugPrint("ARMOR", "Armor 0x%08X has no formEnchanting", armor->GetFormID());
+            DebugPrint("WARN", "Armor 0x%08X has no formEnchanting", armor->GetFormID());
             return nullptr;
         }
-
         auto* enchantment = armor->formEnchanting;
-        DebugPrint("ARMOR", "Armor 0x%08X has enchantment 0x%08X with %zu effects", armor->GetFormID(),
-                   enchantment->GetFormID(), enchantment->effects.size());
-
         if (enchantment->effects.size() == 0) {
+            DebugPrint("WARN", "Armor 0x%08X enchantment has no effects", armor->GetFormID());
             return nullptr;
         }
 
         // Find the light-associated effect
         for (auto* effect : enchantment->effects) {
+            // Effect sanity checks
             if (!effect || !effect->baseEffect) continue;
-
-            DebugPrint("ARMOR", "Checking effect with base effect 0x%08X", effect->baseEffect->GetFormID());
 
             auto* assocForm = effect->baseEffect->data.associatedForm;
             if (!assocForm) {
-                DebugPrint("ARMOR", "Effect has no associated form");
+                DebugPrint("WARN", "Effect has no associated form");
                 continue;
             }
 
-            DebugPrint("ARMOR", "Associated form 0x%08X, type: %d", assocForm->GetFormID(),
-                       (int)assocForm->GetFormType());
-
+            // Check if the associated form is a light
             auto* light = assocForm->As<RE::TESObjectLIGH>();
             if (light) {
-                DebugPrint("ARMOR", "Found light 0x%08X in armor enchantment", light->GetFormID());
                 return light;
             }
         }
 
-        DebugPrint("ARMOR", "No light found in armor 0x%08X enchantment", armor->GetFormID());
+        DebugPrint("WARN", "No light found in armor 0x%08X enchantment", armor->GetFormID());
         return nullptr;
     }
 

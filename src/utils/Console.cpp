@@ -55,7 +55,7 @@ namespace ActorShadowLimiter {
             actorInfo += ")";
         }
 
-        SKSE::log::info("[{}] [{}] {}", action, actorInfo, buffer);
+        SKSE::log::info("[{}] ['{}'] {}", action, actorInfo, buffer);
     }
 
     void PrintPlayerNiNodeTree() {

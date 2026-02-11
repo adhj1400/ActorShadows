@@ -44,64 +44,57 @@ namespace ActorShadowLimiter {
         if (!form) {
             return RE::BSEventNotifyControl::kContinue;
         }
-
-        // Check if this is a configured light
-        if (IsHandheldLight(form)) {
-            if (!IsInConfig(form)) {
-                return RE::BSEventNotifyControl::kContinue;
-            }
-
-            // Actor equipped a configured light -> Start tracking the actor
-            if (event->equipped) {
-                ActorTracker::GetSingleton().GetOrCreateActor(actor->GetFormID());
-            }
-            auto* trackedActor = ActorTracker::GetSingleton().GetActor(actor->GetFormID());
-            auto* lightBase = form->As<RE::TESObjectLIGH>();
-
-            // If a re-equip is in action, SHADOW or STATIC - Skip
-            if (trackedActor && trackedActor->IsReEquipping()) {
-                DebugPrint("EQUIP", actor, "Re-equip in progress for light 0x%08X.", lightBase->GetFormID());
-                return RE::BSEventNotifyControl::kContinue;
-            }
-
-            // Actor unequipped the light, and not during a re-equip -> Stop tracking the actor
-            if (!event->equipped) {
-                DebugPrint("EQUIP", actor, "Unequipped light 0x%08X. Stopping tracking.", lightBase->GetFormID());
-                ActorTracker::GetSingleton().RemoveActor(actor->GetFormID());
-                return RE::BSEventNotifyControl::kContinue;
-            }
-
-            // BELOW CODE SHOULD ONLY RUN ON INITIAL EQUIP, NOT RE-EQUIP OR UNEQUIP
-            // Safety check - actor should exist since we created it on equip
-            if (!trackedActor) {
-                DebugPrint("WARN", actor,
-                           "Untracked actor detected! Failed to track actor after equipping light 0x%08X.",
-                           lightBase->GetFormID());
-                return RE::BSEventNotifyControl::kContinue;
-            }
-
-            bool isShadowsAllowed = EvaluateActorAndScene(actor);
-            ForceReequipLight(actor, lightBase, isShadowsAllowed);
-
-            DebugPrint("EQUIP", actor, "Equipped light 0x%08X with %s shadows.", lightBase->GetFormID(),
-                       isShadowsAllowed ? "SHADOW" : "STATIC");
-
-            EnablePolling();
+        if (!IsInConfig(form)) {
+            return RE::BSEventNotifyControl::kContinue;
         }
-        // else if (IsLightEmittingArmor(form)) {
-        //     auto* armorBase = form->As<RE::TESObjectARMO>();
-        //     if (!armorBase || !IsInConfig(armorBase)) {
-        //         return RE::BSEventNotifyControl::kContinue;
-        //     }
 
-        //     DebugPrint("EQUIP", "Configured armor light 0x%08X equipped. Starting tracking.",
-        //     armorBase->GetFormID());
+        // Track actor if equipping
+        if (event->equipped) {
+            ActorTracker::GetSingleton().GetOrCreateActor(actor->GetFormID());
+        }
 
-        //     EnablePolling();
-        //     UpdatePlayerLightShadows(true);
-        // }
+        // If a re-equip is in action, shadow or static - Skip execution
+        // We are assuming that actor is being tracked, otherwise skip execution
+        auto* trackedActor = ActorTracker::GetSingleton().GetActor(actor->GetFormID());
+        if (trackedActor && trackedActor->IsReEquipping()) {
+            DebugPrint("EQUIP", actor, "Re-equip in progress for light 0x%08X.", form->GetFormID());
+            return RE::BSEventNotifyControl::kContinue;
+        }
+
+        // Actor unequipped the light, and not during a re-equip -> Stop tracking the actor
+        if (!event->equipped) {
+            DebugPrint("EQUIP", actor, "Unequipped light 0x%08X. Stopping tracking.", form->GetFormID());
+            ActorTracker::GetSingleton().RemoveActor(actor->GetFormID());
+            return RE::BSEventNotifyControl::kContinue;
+        }
+
+        // Handle case where multiple configured lights are equipped
+        if (trackedActor->HasTrackedLight() && trackedActor->GetTrackedLight() != form->GetFormID()) {
+            DebugPrint("WARN", actor, "Already tracking light 0x%08X.", trackedActor->GetTrackedLight().value_or(0));
+            return RE::BSEventNotifyControl::kContinue;
+        }
+
+        // Initial equip logic below, should never run if re-equip or unequip
+        // Safety check - actor should exist since we created it on equip
+        if (!trackedActor) {
+            DebugPrint("WARN", actor, "Untracked actor detected! Failed to track actor after equipping light 0x%08X.",
+                       form->GetFormID());
+            return RE::BSEventNotifyControl::kContinue;
+        }
+
+        // Handle different kinds of equipped lights
+        bool isShadowsAllowed = EvaluateActorAndScene(actor);
+        if (IsHandheldLight(form)) {
+            ForceReEquipLight(actor, form->As<RE::TESObjectLIGH>(), isShadowsAllowed);
+        }
+        if (IsLightEmittingArmor(form)) {
+            ForceReEquipArmor(actor, form->As<RE::TESObjectARMO>(), isShadowsAllowed);
+        }
+        DebugPrint("EQUIP", actor, "Equipped light 0x%08X with %s light variant.", form->GetFormID(),
+                   isShadowsAllowed ? "SHADOW" : "STATIC");
+
+        EnablePolling();
 
         return RE::BSEventNotifyControl::kContinue;
     }
-
 }
