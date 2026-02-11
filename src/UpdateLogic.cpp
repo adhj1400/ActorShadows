@@ -9,6 +9,7 @@
 #include "actor/TrackedActor.h"
 #include "core/Config.h"
 #include "core/Globals.h"
+#include "utils/Cleanup.h"
 #include "utils/Console.h"
 #include "utils/Helpers.h"
 #include "utils/Light.h"
@@ -162,6 +163,12 @@ namespace ActorShadowLimiter {
                     processed++;
                 }
             }
+        }
+
+        // Start duplicate removal thread if any actors have shadows enabled
+        // The thread will auto-stop when no actors have shadows
+        if (g_config.enableDuplicateFix && shadowsAllowed) {
+            StartDuplicateRemovalThread();
         }
     }
 

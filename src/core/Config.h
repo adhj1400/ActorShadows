@@ -55,6 +55,8 @@ namespace ActorShadowLimiter {
         bool enableNpcExterior = false;
         float shadowDistanceSafetyMargin = 0.0f;
         float npcMaxDistance = 10000.0f;
+        bool enableDuplicateFix = true;
+        int duplicateRemovalIntervalMs = 2000;
 
         std::vector<HandHeldLightConfig> handHeldLights;
         std::vector<SpellConfig> spells;

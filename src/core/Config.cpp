@@ -400,6 +400,14 @@ namespace ActorShadowLimiter {
                 } catch (...) {
                     // Keep default
                 }
+            } else if (key == "EnableDuplicateFix") {
+                g_config.enableDuplicateFix = (value == "true" || value == "1" || value == "True" || value == "TRUE");
+            } else if (key == "DuplicateRemovalIntervalMs") {
+                try {
+                    g_config.duplicateRemovalIntervalMs = std::stoi(value);
+                } catch (...) {
+                    // Keep default
+                }
             }
         }
 
@@ -411,12 +419,14 @@ namespace ActorShadowLimiter {
                    "  Debug: %s\n"
                    "  Interior: %s, Exterior: %s\n"
                    "  NPC: %s (Interior: %s, Exterior: %s)\n"
-                   "  Shadow Distance Safety Margin: %.1f",
+                   "  Shadow Distance Safety Margin: %.1f\n"
+                   "  Duplicate Fix: %s (Interval: %dms)",
                    g_config.shadowLightLimit, g_config.shadowLightLimitExterior, g_config.pollIntervalSeconds,
                    g_config.enableDebug ? "ON" : "OFF", g_config.enableInterior ? "ON" : "OFF",
                    g_config.enableExterior ? "ON" : "OFF", g_config.enableNpc ? "ON" : "OFF",
                    g_config.enableNpcInterior ? "ON" : "OFF", g_config.enableNpcExterior ? "ON" : "OFF",
-                   g_config.shadowDistanceSafetyMargin);
+                   g_config.shadowDistanceSafetyMargin, g_config.enableDuplicateFix ? "ON" : "OFF",
+                   g_config.duplicateRemovalIntervalMs);
 
         // Resolve plugin-based form IDs to runtime form IDs
         ResolvePluginFormIDs();
