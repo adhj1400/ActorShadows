@@ -38,6 +38,8 @@ namespace ActorShadowLimiter {
 
     bool IsLightEmittingArmor(RE::TESForm* form) { return form && form->GetFormType() == RE::FormType::Armor; }
 
+    bool IsSpellLight(RE::TESForm* form) { return form && form->GetFormType() == RE::FormType::Spell; }
+
     void WarnIfLightsHaveShadows() {
         bool foundShadows = false;
 

@@ -140,6 +140,53 @@ namespace ActorShadowLimiter {
         }
     }
 
+    void ForceCastSpell(RE::Actor* actor, RE::SpellItem* spell, bool withShadows) {
+        if (!actor || !spell) {
+            return;
+        }
+        auto actorFormId = actor->GetFormID();
+        auto* light = spell->effects[0]->baseEffect->data.associatedForm->As<RE::TESObjectLIGH>();
+        if (!light) {
+            DebugPrint("ERROR", "Associated form for spell 0x%08X is not a light. Cannot cast.", spell->GetFormID());
+            return;
+        }
+        SetLightTypeNative(
+            light, withShadows ? static_cast<uint8_t>(LightType::OmniShadow) : static_cast<uint8_t>(LightType::OmniNS));
+
+        auto* caster = actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant);
+        if (!caster) {
+            return;
+        }
+
+        auto* trackedActor = ActorTracker::GetSingleton().GetOrCreateActor(actorFormId);
+        if (!trackedActor) {
+            DebugPrint("ERROR", "Failed to get or create tracked actor for actor 0x%08X. Cannot cast spell 0x%08X.",
+                       actorFormId, spell->GetFormID());
+            return;
+        }
+
+        trackedActor->SetLightShadowState(spell->GetFormID(), withShadows);
+        caster->CastSpellImmediate(spell, false, actor, 1.0f, false, 0.0f, nullptr);
+
+        // Restore base form after a delay so the reference keeps shadows but base form doesn't
+        std::thread([light, actorFormId, spellFormId = spell->GetFormID()]() {
+            using namespace std::chrono_literals;
+            std::this_thread::sleep_for(1000ms);  // Longer delay to ensure reference is fully created with shadows
+
+            if (auto* tasks = SKSE::GetTaskInterface()) {
+                tasks->AddTask([light, actorFormId, spellFormId]() {
+                    // Restore the base form
+                    SetLightTypeNative(light, static_cast<uint8_t>(LightType::OmniNS));
+
+                    // Re-fetch actor pointer to ensure it's valid
+                    if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorFormId)) {
+                        AdjustSpellLightPosition(actor, spellFormId);
+                    }
+                });
+            }
+        }).detach();
+    }
+
     /**
      * Re-equips the item and restores the base form.
      * In charge of:

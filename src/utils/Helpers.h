@@ -8,6 +8,7 @@ namespace ActorShadowLimiter {
     bool IsPlayerSpellCastEvent(const RE::TESSpellCastEvent* event);
     bool IsHandheldLight(RE::TESForm* form);
     bool IsLightEmittingArmor(RE::TESForm* form);
+    bool IsSpellLight(RE::TESForm* form);
     void WarnIfLightsHaveShadows();
     void LogUnrestoredLights();
 }

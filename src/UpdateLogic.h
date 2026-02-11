@@ -3,7 +3,7 @@
 namespace ActorShadowLimiter {
     void UpdateTrackedLights();
     void StartShadowPollThread();
-    void EnablePolling();
+    void EnablePolling(int delayInSeconds = 4);
     void DisablePolling();
     bool EvaluateActorAndScene(RE::Actor* actor);
 }

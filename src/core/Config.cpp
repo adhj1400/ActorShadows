@@ -127,7 +127,9 @@ namespace ActorShadowLimiter {
         if (!IsValidCell(cell)) {
             return false;
         }
-
+        if (actor->GetParentCell() != player->GetParentCell()) {
+            return false;
+        }
         bool isExterior = cell->IsExteriorCell();
         if (isNpc && isExterior && !g_config.enableNpcExterior) {
             return false;
