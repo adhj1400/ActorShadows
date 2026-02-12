@@ -3,10 +3,9 @@
 #include "../core/Globals.h"
 
 namespace ActorShadowLimiter {
-
     std::uint32_t GetLightType(const RE::TESObjectLIGH* a_light) {
         if (!a_light) {
-            return static_cast<std::uint32_t>(LightType::HemiNS);
+            return static_cast<std::uint32_t>(LightType::OmniNS);
         }
 
         const auto& flags = a_light->data.flags;
@@ -28,7 +27,7 @@ namespace ActorShadowLimiter {
             return static_cast<std::uint32_t>(LightType::SpotShadow);
         }
 
-        return static_cast<std::uint32_t>(LightType::HemiNS);
+        return static_cast<std::uint32_t>(LightType::OmniNS);
     }
 
     bool HasShadows(const RE::TESObjectLIGH* a_light) {
@@ -40,7 +39,7 @@ namespace ActorShadowLimiter {
         return flags.any(FLAGS::kHemiShadow, FLAGS::kOmniShadow, FLAGS::kSpotShadow);
     }
 
-    void SetLightTypeNative(RE::TESObjectLIGH* a_light, std::uint32_t a_type) {
+    void SetLightTypeNative(RE::TESObjectLIGH* a_light, bool withShadows) {
         if (!a_light) {
             return;
         }
@@ -49,15 +48,10 @@ namespace ActorShadowLimiter {
         std::lock_guard<std::mutex> lock(g_lightModificationMutex);
 
         auto& flags = a_light->data.flags;
-        switch (a_type) {
-            case static_cast<std::uint32_t>(LightType::OmniNS):
-                flags.reset(FLAGS::kHemiShadow, FLAGS::kOmniShadow, FLAGS::kSpotlight, FLAGS::kSpotShadow);
-                break;
-            case static_cast<std::uint32_t>(LightType::OmniShadow):
-                flags.set(FLAGS::kOmniShadow);
-                break;
-            default:
-                break;
+        if (withShadows) {
+            flags.set(FLAGS::kOmniShadow);
+        } else {
+            flags.reset(FLAGS::kHemiShadow, FLAGS::kOmniShadow, FLAGS::kSpotlight, FLAGS::kSpotShadow);
         }
     }
 

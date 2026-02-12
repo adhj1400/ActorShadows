@@ -36,8 +36,20 @@ namespace ActorShadowLimiter {
         return nullptr;
     }
 
-    void ForceCastSpell(RE::Actor* actor, RE::SpellItem* spell, bool withShadows) {
+    void ForceCastSpell(RE::Actor* actor, RE::SpellItem* spell, bool withShadows, bool skipIfNotActive) {
         if (!actor || !spell) {
+            return;
+        }
+
+        // Skip execution and remove tracked actor if the spell's
+        // magic effect is not active on the actor.
+        auto activeSpells = GetActiveConfiguredSpells(actor);
+        bool isSpellActive =
+            std::find(activeSpells.begin(), activeSpells.end(), spell->GetFormID()) != activeSpells.end();
+        if (skipIfNotActive && !isSpellActive) {
+            DebugPrint("WARN", actor, "Skipping spell light 0x%08X - magic effect not active on actor",
+                       spell->GetFormID());
+            ActorTracker::GetSingleton().RemoveActor(actor->GetFormID());
             return;
         }
         auto actorFormId = actor->GetFormID();
@@ -46,8 +58,7 @@ namespace ActorShadowLimiter {
             DebugPrint("ERROR", "Associated form for spell 0x%08X is not a light. Cannot cast.", spell->GetFormID());
             return;
         }
-        SetLightTypeNative(
-            light, withShadows ? static_cast<uint8_t>(LightType::OmniShadow) : static_cast<uint8_t>(LightType::OmniNS));
+        SetLightTypeNative(light, withShadows);
 
         auto* caster = actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant);
         if (!caster) {
@@ -55,12 +66,6 @@ namespace ActorShadowLimiter {
         }
 
         auto* trackedActor = ActorTracker::GetSingleton().GetOrCreateActor(actorFormId);
-        if (!trackedActor) {
-            DebugPrint("ERROR", "Failed to get or create tracked actor for actor 0x%08X. Cannot cast spell 0x%08X.",
-                       actorFormId, spell->GetFormID());
-            return;
-        }
-
         trackedActor->SetLightShadowState(spell->GetFormID(), withShadows);
         caster->CastSpellImmediate(spell, false, actor, 1.0f, false, 0.0f, nullptr);
 
@@ -72,7 +77,7 @@ namespace ActorShadowLimiter {
             if (auto* tasks = SKSE::GetTaskInterface()) {
                 tasks->AddTask([light, actorFormId, spellFormId]() {
                     // Restore the base form
-                    SetLightTypeNative(light, static_cast<uint8_t>(LightType::OmniNS));
+                    SetLightTypeNative(light, false);
 
                     // Re-fetch actor pointer to ensure it's valid
                     if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorFormId)) {
@@ -102,7 +107,7 @@ namespace ActorShadowLimiter {
         trackedActor->SetReEquipping(true);
         trackedActor->SetLightShadowState(light->GetFormID(), withShadows);
 
-        SetLightTypeNative(light, static_cast<uint8_t>(withShadows ? LightType::OmniShadow : LightType::OmniNS));
+        SetLightTypeNative(light, withShadows);
 
         // Default to left hand slot (VR compatibility - GetObject crashes in VR)
         RE::BGSEquipSlot* slot = nullptr;
@@ -121,7 +126,7 @@ namespace ActorShadowLimiter {
             if (auto* tasks = SKSE::GetTaskInterface()) {
                 tasks->AddTask([light, lightFormId, actorFormId]() {
                     // Restore the base form
-                    SetLightTypeNative(light, static_cast<uint8_t>(LightType::OmniNS));
+                    SetLightTypeNative(light, false);
 
                     // Re-fetch actor pointer to ensure it's valid
                     if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorFormId)) {
@@ -148,7 +153,7 @@ namespace ActorShadowLimiter {
         trackedActor->SetLightShadowState(armor->GetFormID(), withShadows);
 
         auto* armorLight = GetLightFromEnchantedArmor(armor);
-        SetLightTypeNative(armorLight, static_cast<uint8_t>(withShadows ? LightType::OmniShadow : LightType::OmniNS));
+        SetLightTypeNative(armorLight, withShadows);
 
         // Do entire sequence in one thread with delays between operations
         std::thread([actor, armor, armorLight, equipManager, withShadows, trackedActor]() {
@@ -181,7 +186,7 @@ namespace ActorShadowLimiter {
             if (auto* tasks = SKSE::GetTaskInterface()) {
                 tasks->AddTask([armorLight, armorFormId, trackedActor]() {
                     if (armorLight) {
-                        SetLightTypeNative(armorLight, static_cast<uint8_t>(LightType::OmniNS));
+                        SetLightTypeNative(armorLight, false);
                     }
                     trackedActor->SetReEquipping(false);
                 });

@@ -20,6 +20,7 @@ namespace ActorShadowLimiter {
         bool HasActor(uint32_t actorFormId) const;
         void RemoveActor(uint32_t actorFormId);
         void ClearAllActors();
+        bool ContainsTrackedNpcs() const;
 
         // Get all tracked actors
         std::vector<uint32_t> GetAllTrackedActorIds(bool sortByDistance = false, bool closestFirst = true) const;

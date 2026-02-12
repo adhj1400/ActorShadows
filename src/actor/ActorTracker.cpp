@@ -129,4 +129,15 @@ namespace ActorShadowLimiter {
         return false;
     }
 
+    bool ActorTracker::ContainsTrackedNpcs() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+
+        for (const auto& [actorFormId, actor] : trackedActors_) {
+            if (actorFormId != 0x14) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }

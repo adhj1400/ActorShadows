@@ -413,7 +413,8 @@ namespace ActorShadowLimiter {
 
         file.close();
 
-        // Fetch shadow distances from game INI settings
+        // Fetch shadow distances from game INI settings.
+        // These are used to calculate exact render distances, combined with light radius values and some safety margin.
         auto* prefSettings = RE::INIPrefSettingCollection::GetSingleton();
         if (prefSettings) {
             if (auto* setting = prefSettings->GetSetting("fInteriorShadowDistance:Display")) {

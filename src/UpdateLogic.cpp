@@ -1,5 +1,6 @@
 #include "UpdateLogic.h"
 
+#include <algorithm>
 #include <chrono>
 #include <thread>
 
@@ -159,8 +160,13 @@ namespace ActorShadowLimiter {
 
         // Start duplicate removal thread if any actors have shadows enabled
         // The thread will auto-stop when no actors have shadows
-        if (g_config.enableDuplicateFix && shadowsAllowed) {
+        if (g_config.enableDuplicateFix && shadowsAllowed && ActorTracker::GetSingleton().ContainsTrackedNpcs()) {
             StartDuplicateRemovalThread();
+        }
+
+        // Stop it if there are no npcs being tracked as it is not required for the player
+        if (!ActorTracker::GetSingleton().ContainsTrackedNpcs()) {
+            StopDuplicateRemovalThread();
         }
     }
 

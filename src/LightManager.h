@@ -7,7 +7,7 @@ namespace ActorShadowLimiter {
 
     void ForceReEquipLight(RE::Actor* actor, RE::TESObjectLIGH* light, bool withShadows);
     void ForceReEquipArmor(RE::Actor* actor, RE::TESObjectARMO* armor, bool withShadows);
-    void ForceCastSpell(RE::Actor* actor, RE::SpellItem* spell, bool withShadows);
+    void ForceCastSpell(RE::Actor* actor, RE::SpellItem* spell, bool withShadows, bool skipIfNotActive = true);
 
     int CountNearbyShadowLights();
 
