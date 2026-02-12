@@ -53,7 +53,7 @@ namespace ActorShadowLimiter {
                 // Auto-stop if no tracked actors have shadows enabled
                 if (!HasActorsWithShadows()) {
                     DebugPrint("DUPLICATE", "No tracked actors with shadows, stopping thread");
-                    g_duplicateRemovalThreadRunning = false;
+                    StopDuplicateRemovalThread();
                     break;
                 }
 

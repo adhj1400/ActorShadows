@@ -1,5 +1,6 @@
 #include "UpdateLogic.h"
 
+#include <algorithm>
 #include <chrono>
 #include <thread>
 
@@ -16,10 +17,6 @@
 #include "utils/MagicEffect.h"
 
 namespace ActorShadowLimiter {
-
-    /**
-     * Evaluate the scene and returns wether shadows can be applied or not.
-     */
     bool EvaluateActorAndScene(RE::Actor* actor) {
         auto* origoActor = RE::PlayerCharacter::GetSingleton();
         if (!origoActor) {
@@ -47,10 +44,6 @@ namespace ActorShadowLimiter {
         return shadowLightCount < shadowLimit;
     }
 
-    /**
-     * Main, non-actor-specific evaluation loop logic that runs continuously.
-     * Evaluates the scene and each of the tracked actors, force re-equips where necessary.
-     */
     void UpdateTrackedLights() {
         // Sanity checks
         // Note: Cleanup should be done in the CellListener, i.e. if the player moves from a valid to a non-valid cell.
@@ -167,8 +160,13 @@ namespace ActorShadowLimiter {
 
         // Start duplicate removal thread if any actors have shadows enabled
         // The thread will auto-stop when no actors have shadows
-        if (g_config.enableDuplicateFix && shadowsAllowed) {
+        if (g_config.enableDuplicateFix && shadowsAllowed && ActorTracker::GetSingleton().ContainsTrackedNpcs()) {
             StartDuplicateRemovalThread();
+        }
+
+        // Stop it if there are no npcs being tracked as it is not required for the player
+        if (!ActorTracker::GetSingleton().ContainsTrackedNpcs()) {
+            StopDuplicateRemovalThread();
         }
     }
 
@@ -221,7 +219,7 @@ namespace ActorShadowLimiter {
         }).detach();
     }
 
-    void DisablePolling() {
+    void StopShadowPollThread() {
         if (g_shouldPoll) {
             DebugPrint("UPDATE", "Disabling shadow polling");
             g_shouldPoll = false;

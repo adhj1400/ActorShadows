@@ -10,6 +10,7 @@
 #include "utils/Console.h"
 #include "utils/Light.h"
 #include "utils/MagicEffect.h"
+#include "utils/Transforms.h"
 
 namespace ActorShadowLimiter {
 
@@ -35,113 +36,20 @@ namespace ActorShadowLimiter {
         return nullptr;
     }
 
-    void ResetEquippedLightToNoShadow(RE::Actor* actor) {
-        if (!actor) {
-            return;
-        }
-
-        auto* lightBase = GetEquippedLight(actor);
-        if (!lightBase) {
-            return;
-        }
-
-        uint32_t lightFormId = lightBase->GetFormID();
-
-        // Check if this light is configured
-        bool isConfigured = false;
-        for (const auto& config : g_config.handHeldLights) {
-            if (config.formId == lightFormId) {
-                isConfigured = true;
-                break;
-            }
-        }
-
-        if (!isConfigured) {
-            return;
-        }
-
-        // Reset the base form
-        SetLightTypeNative(lightBase, static_cast<uint8_t>(LightType::OmniNS));
-    }
-
-    void ResetActiveSpellsToNoShadow(RE::Actor* actor) {
-        if (!actor) {
-            return;
-        }
-
-        // Get active configured spells
-        auto activeSpells = GetActiveConfiguredSpells(actor);
-        if (activeSpells.empty()) {
-            return;
-        }
-
-        // For each active configured spell, reset its light to no-shadow
-        for (uint32_t spellFormId : activeSpells) {
-            // Get the spell form
-            auto* spellForm = RE::TESForm::LookupByID(spellFormId);
-            if (!spellForm) {
-                continue;
-            }
-
-            auto* spell = spellForm->As<RE::SpellItem>();
-            if (!spell || spell->effects.empty()) {
-                continue;
-            }
-
-            // Get light from first effect
-            auto* effect = spell->effects[0];
-            if (!effect || !effect->baseEffect) {
-                continue;
-            }
-
-            auto* lightBase = effect->baseEffect->data.light;
-            if (!lightBase) {
-                continue;
-            }
-
-            // Set to no-shadow variant
-            uint8_t noShadowType = static_cast<uint8_t>(LightType::OmniNS);
-            SetLightTypeNative(lightBase, noShadowType);
-
-            // Update last known state
-            g_lastShadowStates[spellFormId] = false;
-        }
-    }
-
-    void ResetActiveEnchantedArmorsToNoShadow(RE::Actor* actor) {
-        if (!actor) {
-            return;
-        }
-
-        // Get active configured enchanted armors
-        auto activeArmors = GetActiveConfiguredEnchantedArmors(actor);
-        if (activeArmors.empty()) {
-            return;
-        }
-
-        // For each active configured enchanted armor, reset its light to no-shadow
-        for (uint32_t armorFormId : activeArmors) {
-            auto* armor = RE::TESForm::LookupByID<RE::TESObjectARMO>(armorFormId);
-            if (!armor) {
-                continue;
-            }
-
-            auto* armorLight = GetLightFromEnchantedArmor(armor);
-            if (!armorLight) {
-                continue;
-            }
-
-            // Set to no-shadow variant
-            uint8_t noShadowType = static_cast<uint8_t>(LightType::OmniNS);
-            SetLightTypeNative(armorLight, noShadowType);
-
-            // Update last known state
-            g_lastShadowStates[armorFormId] = false;
-        }
-    }
-
-    void ForceCastSpell(RE::Actor* actor, RE::SpellItem* spell, bool withShadows) {
+    void ForceCastSpell(RE::Actor* actor, RE::SpellItem* spell, bool withShadows, bool skipIfNotActive) {
         if (!actor || !spell) {
+            return;
+        }
+
+        // Skip execution and remove tracked actor if the spell's
+        // magic effect is not active on the actor.
+        auto activeSpells = GetActiveConfiguredSpells(actor);
+        bool isSpellActive =
+            std::find(activeSpells.begin(), activeSpells.end(), spell->GetFormID()) != activeSpells.end();
+        if (skipIfNotActive && !isSpellActive) {
+            DebugPrint("WARN", actor, "Skipping spell light 0x%08X - magic effect not active on actor",
+                       spell->GetFormID());
+            ActorTracker::GetSingleton().RemoveActor(actor->GetFormID());
             return;
         }
         auto actorFormId = actor->GetFormID();
@@ -150,8 +58,7 @@ namespace ActorShadowLimiter {
             DebugPrint("ERROR", "Associated form for spell 0x%08X is not a light. Cannot cast.", spell->GetFormID());
             return;
         }
-        SetLightTypeNative(
-            light, withShadows ? static_cast<uint8_t>(LightType::OmniShadow) : static_cast<uint8_t>(LightType::OmniNS));
+        SetLightTypeNative(light, withShadows);
 
         auto* caster = actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant);
         if (!caster) {
@@ -159,12 +66,6 @@ namespace ActorShadowLimiter {
         }
 
         auto* trackedActor = ActorTracker::GetSingleton().GetOrCreateActor(actorFormId);
-        if (!trackedActor) {
-            DebugPrint("ERROR", "Failed to get or create tracked actor for actor 0x%08X. Cannot cast spell 0x%08X.",
-                       actorFormId, spell->GetFormID());
-            return;
-        }
-
         trackedActor->SetLightShadowState(spell->GetFormID(), withShadows);
         caster->CastSpellImmediate(spell, false, actor, 1.0f, false, 0.0f, nullptr);
 
@@ -176,7 +77,7 @@ namespace ActorShadowLimiter {
             if (auto* tasks = SKSE::GetTaskInterface()) {
                 tasks->AddTask([light, actorFormId, spellFormId]() {
                     // Restore the base form
-                    SetLightTypeNative(light, static_cast<uint8_t>(LightType::OmniNS));
+                    SetLightTypeNative(light, false);
 
                     // Re-fetch actor pointer to ensure it's valid
                     if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorFormId)) {
@@ -206,7 +107,7 @@ namespace ActorShadowLimiter {
         trackedActor->SetReEquipping(true);
         trackedActor->SetLightShadowState(light->GetFormID(), withShadows);
 
-        SetLightTypeNative(light, static_cast<uint8_t>(withShadows ? LightType::OmniShadow : LightType::OmniNS));
+        SetLightTypeNative(light, withShadows);
 
         // Default to left hand slot (VR compatibility - GetObject crashes in VR)
         RE::BGSEquipSlot* slot = nullptr;
@@ -225,11 +126,11 @@ namespace ActorShadowLimiter {
             if (auto* tasks = SKSE::GetTaskInterface()) {
                 tasks->AddTask([light, lightFormId, actorFormId]() {
                     // Restore the base form
-                    SetLightTypeNative(light, static_cast<uint8_t>(LightType::OmniNS));
+                    SetLightTypeNative(light, false);
 
                     // Re-fetch actor pointer to ensure it's valid
                     if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorFormId)) {
-                        AdjustHeldLightPosition(actor);
+                        AdjustHeldLightPosition(actor, lightFormId);
                     }
 
                     // Re-fetch to ensure valid pointer
@@ -252,7 +153,7 @@ namespace ActorShadowLimiter {
         trackedActor->SetLightShadowState(armor->GetFormID(), withShadows);
 
         auto* armorLight = GetLightFromEnchantedArmor(armor);
-        SetLightTypeNative(armorLight, static_cast<uint8_t>(withShadows ? LightType::OmniShadow : LightType::OmniNS));
+        SetLightTypeNative(armorLight, withShadows);
 
         // Do entire sequence in one thread with delays between operations
         std::thread([actor, armor, armorLight, equipManager, withShadows, trackedActor]() {
@@ -285,7 +186,7 @@ namespace ActorShadowLimiter {
             if (auto* tasks = SKSE::GetTaskInterface()) {
                 tasks->AddTask([armorLight, armorFormId, trackedActor]() {
                     if (armorLight) {
-                        SetLightTypeNative(armorLight, static_cast<uint8_t>(LightType::OmniNS));
+                        SetLightTypeNative(armorLight, false);
                     }
                     trackedActor->SetReEquipping(false);
                 });
@@ -293,172 +194,9 @@ namespace ActorShadowLimiter {
         }).detach();
     }
 
-    // Recursively find all nodes with the given name, needed in cases that nodes are duplicated
-    // e.g., multiple candlelight spells floating orb while re-casting
-    void FindAllNodesByName(RE::NiAVObject* root, const std::string& name, std::vector<RE::NiAVObject*>& results) {
-        if (!root) return;
-
-        // Compare node name - handle both null and non-null names
-        const char* nodeName = root->name.c_str();
-        if (nodeName && std::string(nodeName) == name) {
-            results.push_back(root);
-        }
-
-        // If this is a node, search its children
-        if (auto* node = root->AsNode()) {
-            for (auto& child : node->GetChildren()) {
-                if (child) {
-                    FindAllNodesByName(child.get(), name, results);
-                }
-            }
-        }
-    }
-
-    void AdjustLightNodePosition(RE::Actor* actor, const std::string& rootNodeName, const std::string& lightNodeName,
-                                 float offsetX, float offsetY, float offsetZ, float rotateX, float rotateY,
-                                 float rotateZ, uint32_t formId, const char* itemType) {
-        if (!actor) return;
-        if (rootNodeName.empty() || lightNodeName.empty()) return;
-
-        int totalAdjusted = 0;
-
-        // Apply to both first person and third person models
-        auto* firstPerson3D = actor->Get3D(true);
-        auto* thirdPerson3D = actor->Get3D(false);
-
-        for (int modelIndex = 0; modelIndex < 2; ++modelIndex) {
-            auto* model3D = (modelIndex == 0) ? firstPerson3D : thirdPerson3D;
-            if (!model3D) continue;
-
-            const char* viewName = (modelIndex == 0) ? "first" : "third";
-
-            // Find all root nodes with matching name (handles multiple nodes with same name, e.g., old + new)
-            std::vector<RE::NiAVObject*> rootNodes;
-
-            // Check if the model3D itself matches the root node name
-            if (model3D->name == rootNodeName.c_str()) {
-                rootNodes.push_back(model3D);
-            }
-
-            // Also search within the tree
-            FindAllNodesByName(model3D, rootNodeName, rootNodes);
-
-            if (rootNodes.empty()) {
-                DebugPrint("TRANSFORM", "Root node '%s' not found for %s 0x%08X in %s person view",
-                           rootNodeName.c_str(), itemType, formId, viewName);
-                continue;
-            }
-
-            int adjustedCount = 0;
-            // Apply transform to all light nodes within all root nodes
-            for (auto* rootNode : rootNodes) {
-                std::vector<RE::NiAVObject*> lightNodes;
-                FindAllNodesByName(rootNode, lightNodeName, lightNodes);
-
-                for (auto* lightNode : lightNodes) {
-                    // Move the light (Y axis because node rotation is flipped)
-                    lightNode->local.translate.x += offsetX;
-                    lightNode->local.translate.y += offsetY;
-                    lightNode->local.translate.z += offsetZ;
-
-                    // Apply rotation (in radians)
-                    constexpr float DEG_TO_RAD = 3.14159265f / 180.0f;
-                    lightNode->local.rotate.SetEulerAnglesXYZ(rotateX * DEG_TO_RAD, rotateY * DEG_TO_RAD,
-                                                              rotateZ * DEG_TO_RAD);
-
-                    // Update the node
-                    RE::NiUpdateData updateData;
-                    lightNode->Update(updateData);
-                    adjustedCount++;
-                }
-            }
-
-            if (adjustedCount > 0) {
-                DebugPrint("TRANSFORM",
-                           "Adjusted %d light node(s) '%s' within %zu root node(s) '%s' for %s 0x%08X in %s "
-                           "person view with values offset(%.2f, %.2f, %.2f) rotation(%.2f, %.2f, %.2f)",
-                           adjustedCount, lightNodeName.c_str(), rootNodes.size(), rootNodeName.c_str(), itemType,
-                           formId, viewName, offsetX, offsetY, offsetZ, rotateX, rotateY, rotateZ);
-                totalAdjusted += adjustedCount;
-            }
-        }
-
-        if (totalAdjusted == 0) {
-            DebugPrint("TRANSFORM", "Light node '%s' not found in any model for %s 0x%08X", lightNodeName.c_str(),
-                       itemType, formId);
-        }
-    }
-
-    void AdjustHeldLightPosition(RE::Actor* actor) {
-        // Find the equipped light's config
-        auto* lightBase = GetEquippedLight(actor);
-        if (!lightBase) return;
-
-        uint32_t lightFormId = lightBase->GetFormID();
-        const HandHeldLightConfig* lightConfig = nullptr;
-
-        for (const auto& config : g_config.handHeldLights) {
-            if (config.formId == lightFormId) {
-                lightConfig = &config;
-                break;
-            }
-        }
-
-        if (!lightConfig) {
-            DebugPrint("TRANSFORM", "No configuration found for hand-held light 0x%08X", lightFormId);
-            return;
-        }
-
-        AdjustLightNodePosition(actor, lightConfig->rootNodeName, lightConfig->lightNodeName, lightConfig->offsetX,
-                                lightConfig->offsetY, lightConfig->offsetZ, lightConfig->rotateX, lightConfig->rotateY,
-                                lightConfig->rotateZ, lightFormId, "light");
-    }
-
-    void AdjustSpellLightPosition(RE::Actor* actor, uint32_t spellFormId) {
-        if (!actor) return;
-
-        // Find the spell's config
-        const SpellConfig* spellConfig = nullptr;
-
-        for (const auto& config : g_config.spells) {
-            if (config.formId == spellFormId) {
-                spellConfig = &config;
-                break;
-            }
-        }
-
-        if (!spellConfig) {
-            DebugPrint("TRANSFORM", "No configuration found for spell 0x%08X", spellFormId);
-            return;
-        }
-
-        AdjustLightNodePosition(actor, spellConfig->rootNodeName, spellConfig->lightNodeName, spellConfig->offsetX,
-                                spellConfig->offsetY, spellConfig->offsetZ, spellConfig->rotateX, spellConfig->rotateY,
-                                spellConfig->rotateZ, spellFormId, "spell");
-    }
-
-    void AdjustEnchantmentLightPosition(RE::Actor* actor, uint32_t armorFormId) {
-        if (!actor) return;
-        const EnchantedArmorConfig* armorConfig = nullptr;
-
-        for (const auto& config : g_config.enchantedArmors) {
-            if (config.formId == armorFormId) {
-                armorConfig = &config;
-                break;
-            }
-        }
-
-        if (!armorConfig) {
-            DebugPrint("TRANSFORM", "No configuration found for enchanted armor 0x%08X", armorFormId);
-            return;
-        }
-
-        AdjustLightNodePosition(actor, armorConfig->rootNodeName, armorConfig->lightNodeName, armorConfig->offsetX,
-                                armorConfig->offsetY, armorConfig->offsetZ, armorConfig->rotateX, armorConfig->rotateY,
-                                armorConfig->rotateZ, armorFormId, "armor");
-    }
-
-    // Scan for any configured spells currently active on the actor
+    /*
+     * Scan for any configured spells currently active on the actor
+     */
     std::vector<uint32_t> GetActiveConfiguredSpells(RE::Actor* actor) {
         std::vector<uint32_t> activeSpells;
 
@@ -480,7 +218,9 @@ namespace ActorShadowLimiter {
         return activeSpells;
     }
 
-    // Check if actor has a configured hand-held light equipped
+    /**
+     * Check if actor has a configured hand-held light equipped
+     */
     std::optional<uint32_t> GetActiveConfiguredLight(RE::Actor* actor) {
         auto* lightBase = GetEquippedLight(actor);
         if (!lightBase) return std::nullopt;
@@ -497,7 +237,9 @@ namespace ActorShadowLimiter {
         return std::nullopt;
     }
 
-    // Get all equipped enchanted armors from config
+    /*
+     * Get all equipped enchanted armors from config
+     */
     std::vector<uint32_t> GetActiveConfiguredEnchantedArmors(RE::Actor* actor) {
         std::vector<uint32_t> activeArmors;
         if (!actor) return activeArmors;
@@ -603,24 +345,8 @@ namespace ActorShadowLimiter {
         };
         std::vector<CountedLight> countedLights;
 
-        // Get shadow distance from INI settings
-        float shadowDistance = 3000.0f;  // Default fallback
-
-        const char* settingName = isInterior ? "fInteriorShadowDistance:Display" : "fShadowDistance:Display";
-
-        // Fetch SkyrimPrefs.ini settings for shadow render distance
-        auto* prefSettings = RE::INIPrefSettingCollection::GetSingleton();
-        if (prefSettings) {
-            auto* setting = prefSettings->GetSetting(settingName);
-            if (setting) {
-                shadowDistance = setting->GetFloat();
-                DebugPrint("SCAN", "Found %s in INIPrefSettingCollection: %.1f", settingName, shadowDistance);
-            } else {
-                DebugPrint("WARN", "Setting %s not found in INIPrefSettingCollection", settingName);
-            }
-        } else {
-            DebugPrint("WARN", "Failed to get INIPrefSettingCollection singleton");
-        }
+        // Get shadow distance from config (initialized from game INI settings)
+        float shadowDistance = isInterior ? g_config.shadowDistanceInterior : g_config.shadowDistanceExterior;
 
         // Iterate through active shadow lights (already filtered by renderer)
         auto& activeShadowLights = shadowSceneNode->GetRuntimeData().activeShadowLights;
