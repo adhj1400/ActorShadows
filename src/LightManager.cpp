@@ -114,15 +114,37 @@ namespace ActorShadowLimiter {
         uint32_t lightFormId = light->GetFormID();
         uint32_t actorFormId = actor->GetFormID();
 
-        // Try unequip/equip with null slot
-        equipManager->UnequipObject(actor, light, nullptr, 1, slot, true, false, false, false, nullptr);
-        equipManager->EquipObject(actor, light, nullptr, 1, slot, true, false, false, false);
-
-        // Restore base form after a delay so the reference keeps shadows but base form doesn't
-        std::thread([light, lightFormId, actorFormId]() {
+        // Do entire sequence in one thread with delays between operations
+        std::thread([actor, light, lightFormId, actorFormId, slot, equipManager, trackedActor]() {
             using namespace std::chrono_literals;
-            std::this_thread::sleep_for(1000ms);  // Longer delay to ensure reference is fully created with shadows
+            constexpr auto initialDelay = 100ms;
+            constexpr auto unequipWaitTime = 100ms;
+            constexpr auto restoreFormDelay = 1000ms;
 
+            // Initial delay before starting operations
+            std::this_thread::sleep_for(initialDelay);
+
+            // Unequip
+            if (auto* tasks = SKSE::GetTaskInterface()) {
+                tasks->AddTask([actor, light, slot, equipManager]() {
+                    equipManager->UnequipObject(actor, light, nullptr, 1, slot, true, false, false, false, nullptr);
+                });
+            }
+
+            // Wait for unequip to complete
+            std::this_thread::sleep_for(unequipWaitTime);
+
+            // Re-equip
+            if (auto* tasks = SKSE::GetTaskInterface()) {
+                tasks->AddTask([actor, light, slot, equipManager]() {
+                    equipManager->EquipObject(actor, light, nullptr, 1, slot, true, false, false, false);
+                });
+            }
+
+            // Wait for reference to be created with shadows
+            std::this_thread::sleep_for(restoreFormDelay);
+
+            // Restore base form
             if (auto* tasks = SKSE::GetTaskInterface()) {
                 tasks->AddTask([light, lightFormId, actorFormId]() {
                     // Restore the base form
@@ -410,8 +432,10 @@ namespace ActorShadowLimiter {
             }
         }
 
-        DebugPrint("SCAN", "There are %d lights too close to the player of total %d, Type: %s", shadowLightCount,
-                   activeShadowLights.size(), isInterior ? "INTERIOR" : "EXTERIOR");
+        auto& actorTracker = ActorTracker::GetSingleton();
+        DebugPrint("SCAN", "%d shadow lights too close (total %d) where %d are tracked actors (total %d)",
+                   shadowLightCount, activeShadowLights.size(), actorTracker.GetTrackedActorsWithShadowsCount(),
+                   actorTracker.GetTrackedActorCount());
         DebugPrint("DEBUG", "End of cell scan.");
 
         return shadowLightCount;

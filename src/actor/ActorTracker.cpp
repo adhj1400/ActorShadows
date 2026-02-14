@@ -100,6 +100,18 @@ namespace ActorShadowLimiter {
         return trackedActors_.size();
     }
 
+    size_t ActorTracker::GetTrackedActorsWithShadowsCount() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+
+        size_t count = 0;
+        for (const auto& [actorFormId, actor] : trackedActors_) {
+            if (actor.HasAnyLightWithShadows()) {
+                ++count;
+            }
+        }
+        return count;
+    }
+
     void ActorTracker::SetActorLightShadowState(uint32_t actorFormId, uint32_t lightFormId, bool hasShadows) {
         auto* actor = GetOrCreateActor(actorFormId);
         if (actor) {

@@ -25,6 +25,7 @@ namespace ActorShadowLimiter {
         // Get all tracked actors
         std::vector<uint32_t> GetAllTrackedActorIds(bool sortByDistance = false, bool closestFirst = true) const;
         size_t GetTrackedActorCount() const;
+        size_t GetTrackedActorsWithShadowsCount() const;
 
         // Light management shortcuts
         void SetActorLightShadowState(uint32_t actorFormId, uint32_t lightFormId, bool hasShadows);
