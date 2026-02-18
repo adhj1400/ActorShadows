@@ -58,10 +58,9 @@ namespace ActorShadowLimiter {
         SKSE::log::info("[{}] ['{}'] {}", action, actorInfo, buffer);
     }
 
-    void PrintPlayerNiNodeTree() {
-        auto* player = RE::PlayerCharacter::GetSingleton();
-        if (!player) {
-            DebugPrint("NITREE", "Player singleton not found");
+    void PrintNiNodeTree(RE::Actor* actor) {
+        if (!actor) {
+            DebugPrint("NITREE", "Actor not found!");
             return;
         }
 
@@ -88,21 +87,20 @@ namespace ActorShadowLimiter {
             }
         };
 
-        DebugPrint("NITREE", "=== Player NiNode Tree (First Person) ===");
-        auto* firstPerson3D = player->Get3D(true);
+        DebugPrint("NITREE", actor, "=== NiNode Tree (First Person) ===");
+        auto* firstPerson3D = actor->Get3D(true);
         if (firstPerson3D) {
             printNodeRecursive(firstPerson3D, 0, printNodeRecursive);
         } else {
-            DebugPrint("NITREE", "First person 3D model not found");
+            DebugPrint("NITREE", actor, "First person 3D model not found");
         }
 
-        DebugPrint("NITREE", "");
-        DebugPrint("NITREE", "=== Player NiNode Tree (Third Person) ===");
-        auto* thirdPerson3D = player->Get3D(false);
+        DebugPrint("NITREE", actor, "=== NiNode Tree (Third Person) ===");
+        auto* thirdPerson3D = actor->Get3D(false);
         if (thirdPerson3D) {
             printNodeRecursive(thirdPerson3D, 0, printNodeRecursive);
         } else {
-            DebugPrint("NITREE", "Third person 3D model not found");
+            DebugPrint("NITREE", actor, "Third person 3D model not found");
         }
     }
 

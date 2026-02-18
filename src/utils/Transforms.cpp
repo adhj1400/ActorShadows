@@ -11,9 +11,9 @@ namespace ActorShadowLimiter {
     void FindAllNodesByName(RE::NiAVObject* root, const std::string& name, std::vector<RE::NiAVObject*>& results) {
         if (!root) return;
 
-        // Compare node name - handle both null and non-null names
+        // Compare node name (case-insensitive) - handle both null and non-null names
         const char* nodeName = root->name.c_str();
-        if (nodeName && std::string(nodeName) == name) {
+        if (nodeName && _stricmp(nodeName, name.c_str()) == 0) {
             results.push_back(root);
         }
 
@@ -57,7 +57,7 @@ namespace ActorShadowLimiter {
             FindAllNodesByName(model3D, rootNodeName, rootNodes);
 
             if (rootNodes.empty()) {
-                DebugPrint("TRANSFORM", "Root node '%s' not found for %s 0x%08X in %s person view",
+                DebugPrint("TRANSFORM", actor, "Root node '%s' not found for %s 0x%08X in %s person view",
                            rootNodeName.c_str(), itemType, formId, viewName);
                 continue;
             }
@@ -87,7 +87,7 @@ namespace ActorShadowLimiter {
             }
 
             if (adjustedCount > 0) {
-                DebugPrint("TRANSFORM",
+                DebugPrint("TRANSFORM", actor,
                            "Adjusted %d light node(s) '%s' within %zu root node(s) '%s' for %s 0x%08X in %s "
                            "person view with values offset(%.2f, %.2f, %.2f) rotation(%.2f, %.2f, %.2f)",
                            adjustedCount, lightNodeName.c_str(), rootNodes.size(), rootNodeName.c_str(), itemType,
@@ -97,8 +97,11 @@ namespace ActorShadowLimiter {
         }
 
         if (totalAdjusted == 0) {
-            DebugPrint("TRANSFORM", "Light node '%s' not found in any model for %s 0x%08X", lightNodeName.c_str(),
-                       itemType, formId);
+            DebugPrint("TRANSFORM", actor, "Light node '%s' not found in any model for %s 0x%08X",
+                       lightNodeName.c_str(), itemType, formId);
+            if (g_config.enableDebug) {
+                PrintNiNodeTree(actor);
+            }
         }
     }
 
