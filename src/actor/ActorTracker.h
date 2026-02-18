@@ -36,6 +36,8 @@ namespace ActorShadowLimiter {
         ActorTracker(const ActorTracker&) = delete;
         ActorTracker& operator=(const ActorTracker&) = delete;
 
+        void PrintTrackedActors() const;
+
     private:
         ActorTracker() = default;
 

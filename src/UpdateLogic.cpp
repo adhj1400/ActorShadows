@@ -61,12 +61,14 @@ namespace ActorShadowLimiter {
         for (uint32_t actorFormId : allTrackedActorIds) {
             auto* trackedActor = ActorTracker::GetSingleton().GetActor(actorFormId);
             if (!trackedActor || !trackedActor->HasTrackedLight()) {
+                DebugPrint("SCAN", "Tracked actor 0x%08X has no tracked light, removing from tracker", actorFormId);
                 ActorTracker::GetSingleton().RemoveActor(actorFormId);
                 continue;
             }
 
             auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorFormId);
             if (!actor || !IsValidActor(actor)) {
+                DebugPrint("SCAN", "Tracked actor 0x%08X is no longer valid, removing from tracker", actorFormId);
                 ActorTracker::GetSingleton().RemoveActor(actorFormId);
                 continue;
             }
@@ -167,6 +169,10 @@ namespace ActorShadowLimiter {
         // Stop it if there are no npcs being tracked as it is not required for the player
         if (!ActorTracker::GetSingleton().ContainsTrackedNpcs()) {
             StopDuplicateRemovalThread();
+        }
+
+        if (g_config.enableDebug) {
+            ActorTracker::GetSingleton().PrintTrackedActors();
         }
     }
 

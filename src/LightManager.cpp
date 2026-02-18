@@ -419,8 +419,9 @@ namespace ActorShadowLimiter {
                         if (!isDuplicate) {
                             countedLights.push_back({lightPos, radius});
                             DebugPrint("SCAN",
-                                       "Found shadow light - Pos: (%.1f, %.1f, %.1f), Distance: %.1f, Radius: %.1f, "
-                                       "EffectiveDist: %.1f",
+                                       "Found shadow light - Pos: (%.1f, %.1f, %.1f), Distance from player: %.1f, "
+                                       "Radius: %.1f, "
+                                       "Effective distance: %.1f",
                                        lightPos.x, lightPos.y, lightPos.z, distance, radius, effectiveShadowDistance);
                             ++shadowLightCount;
                             if (distance < closestLightDistance) {

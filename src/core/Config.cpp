@@ -109,32 +109,27 @@ namespace ActorShadowLimiter {
         if (actor->IsPlayerRef()) {
             return true;
         }
-        if (actor->GetActorRuntimeData().currentProcess == nullptr || actor->IsDead() || actor->IsDeleted() ||
-            actor->IsDisabled() || actor->IsSummoned() || !actor->Is3DLoaded()) {
+        if (actor->IsDead() || actor->IsDeleted() || actor->IsDisabled() || actor->IsSummoned() ||
+            !actor->Is3DLoaded()) {
             return false;
         }
 
-        bool isNpc = actor->IsPlayerRef() == false;
-        if (isNpc && !g_config.enableNpc) {
+        if (!g_config.enableNpc) {
             return false;
         }
 
         auto* player = RE::PlayerCharacter::GetSingleton();
-        if (!player) {
+        auto* playerCell = player->GetParentCell();
+        if (!IsValidCell(playerCell)) {
             return false;
         }
-        auto* cell = player->GetParentCell();
-        if (!IsValidCell(cell)) {
+        if (playerCell->IsInteriorCell() && playerCell != actor->GetParentCell()) {
             return false;
         }
-        if (actor->GetParentCell() != player->GetParentCell()) {
+        if (playerCell->IsExteriorCell() && !g_config.enableNpcExterior) {
             return false;
         }
-        bool isExterior = cell->IsExteriorCell();
-        if (isNpc && isExterior && !g_config.enableNpcExterior) {
-            return false;
-        }
-        if (isNpc && !isExterior && !g_config.enableNpcInterior) {
+        if (playerCell->IsInteriorCell() && !g_config.enableNpcInterior) {
             return false;
         }
 

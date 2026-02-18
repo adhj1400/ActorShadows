@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include "../utils/Console.h"
+
 namespace ActorShadowLimiter {
 
     ActorTracker& ActorTracker::GetSingleton() {
@@ -151,5 +153,26 @@ namespace ActorShadowLimiter {
         }
 
         return false;
+    }
+
+    void ActorTracker::PrintTrackedActors() const {
+        auto actorIds = GetAllTrackedActorIds();
+
+        std::string actorList;
+        for (uint32_t actorFormId : actorIds) {
+            auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorFormId);
+            char buffer[256];
+            if (actor) {
+                snprintf(buffer, sizeof(buffer), "%s (FormID: 0x%X), ", actor->GetDisplayFullName(), actorFormId);
+            } else {
+                snprintf(buffer, sizeof(buffer), "Unknown Actor (FormID: 0x%X), ", actorFormId);
+            }
+            actorList += buffer;
+        }
+        if (!actorList.empty() && actorList.length() >= 2) {
+            // Remove trailing comma and space
+            actorList.resize(actorList.length() - 2);
+        }
+        DebugPrint("TRACKER", "Currently tracking %zu actors: %s", actorIds.size(), actorList.c_str());
     }
 }
