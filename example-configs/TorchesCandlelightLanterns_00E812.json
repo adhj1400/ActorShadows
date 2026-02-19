@@ -1,14 +1,14 @@
 {
-  "type": "SpellLight",
-  "formId": "0x043324",
-  "plugin": "Skyrim.esm",
+  "type": "EnchantmentLight",
+  "formId": "0x812",
+  "plugin": "TorchesCandlelightLanterns.esp",
   "rootNodeName": "Mover",
   "lightNodeName": "AttachLight",
   "offsetX": 0.0,
   "offsetY": 0.0,
   "offsetZ": 0.0,
   "rotateX": 0.0,
-  "rotateY": -20.0,
-  "rotateZ": 90.0,
+  "rotateY": 0.0,
+  "rotateZ": 25.0,
   "flickerMovementAmplitude": null
 }

@@ -9,5 +9,6 @@
   "offsetZ": -2.0,
   "rotateX": -20.0,
   "rotateY": 0.0,
-  "rotateZ": 0.0
+  "rotateZ": 0.0,
+  "flickerMovementAmplitude": null
 }

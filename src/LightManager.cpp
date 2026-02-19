@@ -60,6 +60,11 @@ namespace ActorShadowLimiter {
         }
         SetLightTypeNative(light, withShadows);
 
+        auto spellCfg = std::find_if(g_config.spells.begin(), g_config.spells.end(),
+                                     [&](const auto& c) { return c.formId == spell->GetFormID(); });
+        ApplyFlickerMovementAmplitude(
+            light, spellCfg != g_config.spells.end() ? spellCfg->flickerMovementAmplitude : std::nullopt, withShadows);
+
         auto* caster = actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant);
         if (!caster) {
             return;
@@ -108,6 +113,12 @@ namespace ActorShadowLimiter {
         trackedActor->SetLightShadowState(light->GetFormID(), withShadows);
 
         SetLightTypeNative(light, withShadows);
+
+        auto lightCfg = std::find_if(g_config.handHeldLights.begin(), g_config.handHeldLights.end(),
+                                     [&](const auto& c) { return c.formId == light->GetFormID(); });
+        ApplyFlickerMovementAmplitude(
+            light, lightCfg != g_config.handHeldLights.end() ? lightCfg->flickerMovementAmplitude : std::nullopt,
+            withShadows);
 
         // Default to left hand slot (VR compatibility - GetObject crashes in VR)
         RE::BGSEquipSlot* slot = nullptr;
@@ -177,12 +188,19 @@ namespace ActorShadowLimiter {
         auto* armorLight = GetLightFromEnchantedArmor(armor);
         SetLightTypeNative(armorLight, withShadows);
 
+        auto armorCfg = std::find_if(g_config.enchantedArmors.begin(), g_config.enchantedArmors.end(),
+                                     [&](const auto& c) { return c.formId == armor->GetFormID(); });
+        ApplyFlickerMovementAmplitude(
+            armorLight, armorCfg != g_config.enchantedArmors.end() ? armorCfg->flickerMovementAmplitude : std::nullopt,
+            withShadows);
+
         // Do entire sequence in one thread with delays between operations
         std::thread([actor, armor, armorLight, equipManager, withShadows, trackedActor]() {
             using namespace std::chrono_literals;
             constexpr auto unequipWaitTime = 600ms;
             constexpr auto enchantmentRespawnTime = 600ms;
             uint32_t armorFormId = armor->GetFormID();
+            uint32_t actorFormId = actor->GetFormID();
 
             // Unequip
             if (auto* tasks = SKSE::GetTaskInterface()) {
@@ -206,11 +224,19 @@ namespace ActorShadowLimiter {
 
             // Restore base form
             if (auto* tasks = SKSE::GetTaskInterface()) {
-                tasks->AddTask([armorLight, armorFormId, trackedActor]() {
+                tasks->AddTask([armorLight, armorFormId, actorFormId]() {
                     if (armorLight) {
                         SetLightTypeNative(armorLight, false);
                     }
-                    trackedActor->SetReEquipping(false);
+                    // Re-fetch actor pointer to ensure it's valid
+                    if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(actorFormId)) {
+                        AdjustEnchantmentLightPosition(actor, armorFormId);
+                    }
+
+                    // Re-fetch to ensure valid pointer
+                    if (auto* trackedActor = ActorTracker::GetSingleton().GetActor(actorFormId)) {
+                        trackedActor->SetReEquipping(false);
+                    }
                 });
             }
         }).detach();

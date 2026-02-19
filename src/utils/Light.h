@@ -1,9 +1,12 @@
 #pragma once
 
+#include <optional>
+
 #include "RE/Skyrim.h"
 
 namespace ActorShadowLimiter {
     std::uint32_t GetLightType(const RE::TESObjectLIGH* a_light);
     void SetLightTypeNative(RE::TESObjectLIGH* a_light, bool withShadows);
     bool HasShadows(const RE::TESObjectLIGH* a_light);
+    void ApplyFlickerMovementAmplitude(RE::TESObjectLIGH* light, std::optional<float> amplitude, bool withShadows);
 }

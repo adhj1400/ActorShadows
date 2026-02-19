@@ -39,6 +39,11 @@ namespace ActorShadowLimiter {
         return flags.any(FLAGS::kHemiShadow, FLAGS::kOmniShadow, FLAGS::kSpotShadow);
     }
 
+    void ApplyFlickerMovementAmplitude(RE::TESObjectLIGH* light, std::optional<float> amplitude, bool withShadows) {
+        if (!withShadows || !light || !amplitude.has_value()) return;
+        light->data.flickerMovementAmplitude = amplitude.value();
+    }
+
     void SetLightTypeNative(RE::TESObjectLIGH* a_light, bool withShadows) {
         if (!a_light) {
             return;

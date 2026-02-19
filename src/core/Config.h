@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -15,6 +16,7 @@ namespace ActorShadowLimiter {
         float rotateX = 0.0f;
         float rotateY = 0.0f;
         float rotateZ = 0.0f;
+        std::optional<float> flickerMovementAmplitude;
     };
 
     struct SpellConfig {
@@ -28,6 +30,7 @@ namespace ActorShadowLimiter {
         float rotateX = 0.0f;
         float rotateY = 0.0f;
         float rotateZ = 0.0f;
+        std::optional<float> flickerMovementAmplitude;
     };
 
     struct EnchantedArmorConfig {
@@ -41,6 +44,7 @@ namespace ActorShadowLimiter {
         float rotateX = 0.0f;
         float rotateY = 0.0f;
         float rotateZ = 0.0f;
+        std::optional<float> flickerMovementAmplitude;
     };
 
     struct Config {

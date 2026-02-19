@@ -1,14 +1,14 @@
 {
-  "type": "EnchantmentLight",
-  "formId": "0x000D63",
-  "plugin": "QwibNewLanterns.esp",
+  "type": "HandheldLight",
+  "formId": "0x806",
+  "plugin": "TorchesCandlelightLanterns.esp",
   "rootNodeName": "WaterBreathingTargetFX",
   "lightNodeName": "AttachLight",
   "offsetX": 0.0,
-  "offsetY": 20.0,
+  "offsetY": 0.0,
   "offsetZ": 0.0,
   "rotateX": 0.0,
   "rotateY": 0.0,
-  "rotateZ": 90.0,
+  "rotateZ": 25.0,
   "flickerMovementAmplitude": null
 }

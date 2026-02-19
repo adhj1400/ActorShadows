@@ -208,6 +208,9 @@ namespace ActorShadowLimiter {
                 std::string rotateZ = ExtractValue(json, "rotateZ", 0);
                 if (!rotateZ.empty()) light.rotateZ = std::stof(rotateZ);
 
+                std::string fma = ExtractValue(json, "flickerMovementAmplitude", 0);
+                if (!fma.empty() && fma != "null") light.flickerMovementAmplitude = std::stof(fma);
+
                 g_config.handHeldLights.push_back(light);
                 DebugPrint("CONFIG", "Loaded HandheldLight from %s", entry.path().filename().string().c_str());
 
@@ -239,6 +242,9 @@ namespace ActorShadowLimiter {
                 std::string rotateZ = ExtractValue(json, "rotateZ", 0);
                 if (!rotateZ.empty()) spell.rotateZ = std::stof(rotateZ);
 
+                std::string fma = ExtractValue(json, "flickerMovementAmplitude", 0);
+                if (!fma.empty() && fma != "null") spell.flickerMovementAmplitude = std::stof(fma);
+
                 g_config.spells.push_back(spell);
                 DebugPrint("CONFIG", "Loaded SpellLight from %s", entry.path().filename().string().c_str());
 
@@ -269,6 +275,9 @@ namespace ActorShadowLimiter {
 
                 std::string rotateZ = ExtractValue(json, "rotateZ", 0);
                 if (!rotateZ.empty()) armor.rotateZ = std::stof(rotateZ);
+
+                std::string fma = ExtractValue(json, "flickerMovementAmplitude", 0);
+                if (!fma.empty() && fma != "null") armor.flickerMovementAmplitude = std::stof(fma);
 
                 g_config.enchantedArmors.push_back(armor);
                 DebugPrint("CONFIG", "Loaded EnchantmentLight from %s", entry.path().filename().string().c_str());
